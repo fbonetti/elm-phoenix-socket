@@ -5,7 +5,9 @@ import Html.Attributes exposing (type', value)
 import Html.Events exposing (onInput, onSubmit)
 import Html.App
 import WebSocket
-
+import Platform.Cmd
+import Json.Encode as JE
+import Phoenix.Socket
 
 -- MAIN
 
@@ -24,7 +26,7 @@ main =
 
 
 socketServer : String
-socketServer = "ws://echo.websocket.org"
+socketServer = "ws://phoenixchat.herokuapp.com/ws"
 
 
 -- MODEL
@@ -61,6 +63,34 @@ subscriptions model =
   WebSocket.listen socketServer ReceiveMessage
 
 
+-- COMMANDS
+
+
+joinPhoenixChannel : String -> Cmd msg
+joinPhoenixChannel topic =
+  let
+    payload = JE.object [ ("user_id", JE.int 123) ]
+  in
+    sendPhoenixPacket topic "phx_join" payload
+
+
+-- PHOENIX STUFF
+
+packetEncoder : String -> String -> JE.Value -> String
+packetEncoder topic event payload =
+  JE.object
+    [ ( "topic", JE.string topic )
+    , ( "event", JE.string event )
+    , ( "payload", payload )
+    , ( "ref", JE.null )
+    ]
+  |> JE.encode 0
+
+sendPhoenixPacket : String -> String -> JE.Value -> Cmd msg
+sendPhoenixPacket topic event payload =
+  WebSocket.send socketServer (packetEncoder topic event payload)
+
+
 -- UPDATE
 
 
@@ -77,7 +107,10 @@ update msg model =
         | messages = model.newMessage :: model.messages
         , newMessage = ""
         }
-      , WebSocket.send socketServer model.newMessage
+      , Platform.Cmd.batch
+          [ WebSocket.send socketServer ("{\"topic\":\"rooms:lobby\",\"event\":\"new:msg\",\"payload\":{\"user\":\"frank\",\"body\":\"" ++ model.newMessage ++ "\"},\"ref\":null}")
+          , snd (Phoenix.Socket.join "rooms:lobby" (JE.object [ ("user_id", JE.int 123) ]) (Phoenix.Socket.init socketServer))
+          ]
       )
 
     SetNewMessage str ->
