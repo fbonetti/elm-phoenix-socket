@@ -6,11 +6,13 @@ import Html.Events exposing (onInput, onSubmit)
 import Html.App
 import WebSocket
 import Platform.Cmd
-import Json.Encode as JE
 import Phoenix.Socket
+import Json.Encode as JE
+import Json.Decode as JD exposing ((:=))
 
 -- MAIN
 
+-- WebSocket.send socketServer ("{\"topic\":\"rooms:lobby\",\"event\":\"new:msg\",\"payload\":{\"user\":\"frank\",\"body\":\"" ++ model.newMessage ++ "\"},\"ref\":null}")
 
 main : Program Never
 main =
@@ -36,18 +38,25 @@ type Msg
   = ReceiveMessage String
   | SendMessage
   | SetNewMessage String
+  | PhoenixMsg Phoenix.Socket.Msg
+  | ReceivePhxMessage ChatMessage
   | NoOp
 
 
 type alias Model =
   { newMessage : String
   , messages : List String
+  , phxSocket : Phoenix.Socket.Socket Msg
   }
 
+initPhxSocket : Phoenix.Socket.Socket Msg
+initPhxSocket =
+  Phoenix.Socket.init socketServer PhoenixMsg
+    |> Phoenix.Socket.on "new:msg" "rooms:lobby" receivePhxMessageDecoder
 
 initModel : Model
 initModel =
-  Model "" []
+  Model "" [] initPhxSocket
 
 
 init : ( Model, Cmd Msg )
@@ -60,39 +69,32 @@ init =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-  WebSocket.listen socketServer ReceiveMessage
+  --WebSocket.listen socketServer ReceiveMessage
+  Phoenix.Socket.listen model.phxSocket
 
 
 -- COMMANDS
 
 
-joinPhoenixChannel : String -> Cmd msg
-joinPhoenixChannel topic =
-  let
-    payload = JE.object [ ("user_id", JE.int 123) ]
-  in
-    sendPhoenixPacket topic "phx_join" payload
-
-
 -- PHOENIX STUFF
 
-packetEncoder : String -> String -> JE.Value -> String
-packetEncoder topic event payload =
-  JE.object
-    [ ( "topic", JE.string topic )
-    , ( "event", JE.string event )
-    , ( "payload", payload )
-    , ( "ref", JE.null )
-    ]
-  |> JE.encode 0
+type alias ChatMessage =
+  { user : String
+  , body : String
+  }
 
-sendPhoenixPacket : String -> String -> JE.Value -> Cmd msg
-sendPhoenixPacket topic event payload =
-  WebSocket.send socketServer (packetEncoder topic event payload)
-
+receivePhxMessageDecoder : JD.Decoder Msg
+receivePhxMessageDecoder =
+  JD.object2 ChatMessage
+    ("user" := JD.string)
+    ("body" := JD.string)
+  |> JD.map ReceivePhxMessage
 
 -- UPDATE
 
+userParams : JE.Value
+userParams =
+  JE.object [ ("user_id", JE.string "123") ]
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -102,19 +104,32 @@ update msg model =
       , Cmd.none
       )
 
-    SendMessage ->
-      ( { model
-        | messages = model.newMessage :: model.messages
-        , newMessage = ""
-        }
-      , Platform.Cmd.batch
-          [ WebSocket.send socketServer ("{\"topic\":\"rooms:lobby\",\"event\":\"new:msg\",\"payload\":{\"user\":\"frank\",\"body\":\"" ++ model.newMessage ++ "\"},\"ref\":null}")
-          , snd (Phoenix.Socket.join "rooms:lobby" (JE.object [ ("user_id", JE.int 123) ]) (Phoenix.Socket.init socketServer))
-          ]
+    PhoenixMsg msg ->
+      ( { model | phxSocket = Phoenix.Socket.update msg model.phxSocket }
+      , Cmd.none
       )
+
+    SendMessage ->
+      let
+        (phxSocket, phxCmd) = Phoenix.Socket.join "rooms:lobby" userParams model.phxSocket
+      in
+        ( { model
+          | newMessage = ""
+          , phxSocket = phxSocket
+          }
+        , Cmd.batch
+            [ WebSocket.send socketServer ("{\"topic\":\"rooms:lobby\",\"event\":\"new:msg\",\"payload\":{\"user\":\"frank\",\"body\":\"" ++ model.newMessage ++ "\"},\"ref\":null}")
+            , phxCmd
+            ]
+        )
 
     SetNewMessage str ->
       ( { model | newMessage = str }
+      , Cmd.none
+      )
+
+    ReceivePhxMessage chatMessage ->
+      ( { model | messages = (chatMessage.user ++ ": " ++ chatMessage.body) :: model.messages }
       , Cmd.none
       )
 
@@ -129,6 +144,7 @@ view : Model -> Html Msg
 view model =
   div []
     [ h1 [] [ text "Messages:" ]
+    , text (toString model.phxSocket.channels)
     , newMessageForm model
     , ul [] (List.map renderMessage model.messages)
     ]
