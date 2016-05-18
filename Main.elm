@@ -4,7 +4,6 @@ import Html exposing (Html, h1, div, text, ul, li, input, form)
 import Html.Attributes exposing (type', value)
 import Html.Events exposing (onInput, onSubmit)
 import Html.App
-import WebSocket
 import Platform.Cmd
 import Phoenix.Socket
 import Json.Encode as JE
@@ -38,7 +37,7 @@ type Msg
   = ReceiveMessage String
   | SendMessage
   | SetNewMessage String
-  | PhoenixMsg Phoenix.Socket.Msg
+  | PhoenixMsg (Phoenix.Socket.Msg Msg)
   | ReceivePhxMessage ChatMessage
   | NoOp
 
@@ -51,7 +50,7 @@ type alias Model =
 
 initPhxSocket : Phoenix.Socket.Socket Msg
 initPhxSocket =
-  Phoenix.Socket.init socketServer PhoenixMsg
+  Phoenix.Socket.init socketServer
     |> Phoenix.Socket.on "new:msg" "rooms:lobby" receivePhxMessageDecoder
 
 initModel : Model
@@ -69,9 +68,7 @@ init =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-  --WebSocket.listen socketServer ReceiveMessage
-  Phoenix.Socket.listen model.phxSocket
-
+  Phoenix.Socket.events PhoenixMsg model.phxSocket
 
 -- COMMANDS
 
@@ -88,7 +85,7 @@ receivePhxMessageDecoder =
   JD.object2 ChatMessage
     ("user" := JD.string)
     ("body" := JD.string)
-  |> JD.map ReceivePhxMessage
+    |> JD.map ReceivePhxMessage
 
 -- UPDATE
 
@@ -118,7 +115,7 @@ update msg model =
           , phxSocket = phxSocket
           }
         , Cmd.batch
-            [ WebSocket.send socketServer ("{\"topic\":\"rooms:lobby\",\"event\":\"new:msg\",\"payload\":{\"user\":\"frank\",\"body\":\"" ++ model.newMessage ++ "\"},\"ref\":null}")
+            [ Phoenix.Socket.send "rooms:lobby" "new:msg" (JE.object [ ("user", JE.string "frank"), ("body", JE.string model.newMessage) ]) phxSocket
             , phxCmd
             ]
         )

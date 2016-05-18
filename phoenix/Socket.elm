@@ -1,4 +1,4 @@
-module Phoenix.Socket exposing (Socket, Msg, init, join, update, on, listen)
+module Phoenix.Socket exposing (Socket, Msg, init, join, update, on, events, send)
 
 import Dict exposing (Dict)
 import WebSocket
@@ -7,13 +7,12 @@ import Json.Decode as JD exposing ((:=))
 
 -- MODEL
 
-init : String -> (Msg -> msg) -> Socket msg
-init path wrapper =
-  Socket path wrapper (Dict.fromList []) (Dict.fromList [])
+init : String -> Socket msg
+init path =
+  Socket path (Dict.fromList []) (Dict.fromList [])
 
 type alias Socket msg =
   { path : String
-  , wrapper : (Msg -> msg)
   , channels : Dict String ChannelState
   , events : Dict (Event, Channel) (JD.Decoder msg)
   }
@@ -28,8 +27,9 @@ type ChannelState
 type alias Channel = String
 type alias Event = String
 
-type Msg
+type Msg msg
     = NoOp
+    | DispatchMessage msg
     | SetChannelState String ChannelState
 
 -- HELPERS
@@ -79,44 +79,54 @@ encodeMessage =
 
 -- SUBSCRIPTIONS
 
-listen : Socket msg -> Sub msg
-listen socket =
-  WebSocket.listen socket.path (handleMessage socket)
 
-handleMessage : Socket msg -> String -> msg
+events : (Msg msg -> msg) -> Socket msg -> Sub msg
+events fn socket =
+  WebSocket.listen socket.path (handleMessage socket)
+    |> Sub.map (mapThing fn)
+
+mapThing : (Msg msg -> msg) -> Msg msg -> msg
+mapThing fn msg =
+  case msg of
+    DispatchMessage m ->
+      m
+    _ ->
+      fn msg
+
+handleMessage : Socket msg -> String -> Msg msg
 handleMessage socket strMessage =
   let a = Debug.log "rawMessage" strMessage
   in case JD.decodeString messageDecoder strMessage of
     Ok message ->
       if message.event == "phx_reply" then
-        socket.wrapper (handlePhxReply socket message)
+        handlePhxReply socket message
       else if message.event == "phx_error" then
-        socket.wrapper (handlePhxError socket message)
+        handlePhxError socket message
       else
         handleEvent socket message
     Err error ->
-      socket.wrapper NoOp
+      NoOp
 
-handleEvent : Socket msg -> Message -> msg
+handleEvent : Socket msg -> Message -> Msg msg
 handleEvent socket message =
   case Dict.get (message.event, message.topic) socket.events of
     Just decoder ->
       case JD.decodeValue decoder message.payload of
         Ok msg ->
-          msg
+          DispatchMessage msg
         Err error ->
-          socket.wrapper NoOp
+          NoOp
     Nothing ->
-      socket.wrapper NoOp  
+      NoOp  
 
-handlePhxReply : Socket msg -> Message -> Msg
+handlePhxReply : Socket msg -> Message -> Msg msg
 handlePhxReply socket message =
   if Dict.member message.topic socket.channels then
     SetChannelState message.topic ChannelJoined
   else
     NoOp
 
-handlePhxError : Socket msg -> Message -> Msg
+handlePhxError : Socket msg -> Message -> Msg msg
 handlePhxError socket message =
   if Dict.member message.topic socket.channels then
     SetChannelState message.topic ChannelErrored
@@ -138,6 +148,12 @@ joinChannelMessage : String -> JE.Value -> String
 joinChannelMessage channel params =
   encodeMessage (Message channel "phx_join" params Nothing)
 
+send : String -> String -> JE.Value -> Socket msg -> Cmd msg
+send topic event payload socket =
+  Message topic event payload Nothing
+    |> encodeMessage
+    |> WebSocket.send socket.path
+
 -- UPDATE
 
 on : Event -> Channel -> JD.Decoder msg -> Socket msg -> Socket msg
@@ -146,10 +162,12 @@ on event channel decoder socket =
   | events = Dict.insert (event, channel) decoder socket.events
   }
 
-update : Msg -> Socket msg -> Socket msg
+update : Msg msg -> Socket msg -> Socket msg
 update msg socket =
   case msg of
-    NoOp ->
-      socket
     SetChannelState channel state ->
       { socket | channels = Dict.insert channel state socket.channels }
+    DispatchMessage _ ->
+      socket
+    NoOp ->
+      socket
