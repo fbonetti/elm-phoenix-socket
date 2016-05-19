@@ -1,8 +1,8 @@
 module Main exposing (..)
 
-import Html exposing (Html, h1, div, text, ul, li, input, form)
+import Html exposing (Html, h1, div, text, ul, li, input, form, button, br)
 import Html.Attributes exposing (type', value)
-import Html.Events exposing (onInput, onSubmit)
+import Html.Events exposing (onInput, onSubmit, onClick)
 import Html.App
 import Platform.Cmd
 import Phoenix.Socket
@@ -10,8 +10,6 @@ import Json.Encode as JE
 import Json.Decode as JD exposing ((:=))
 
 -- MAIN
-
--- WebSocket.send socketServer ("{\"topic\":\"rooms:lobby\",\"event\":\"new:msg\",\"payload\":{\"user\":\"frank\",\"body\":\"" ++ model.newMessage ++ "\"},\"ref\":null}")
 
 main : Program Never
 main =
@@ -39,6 +37,8 @@ type Msg
   | SetNewMessage String
   | PhoenixMsg (Phoenix.Socket.Msg Msg)
   | ReceivePhxMessage ChatMessage
+  | JoinChannel
+  | LeaveChannel
   | NoOp
 
 
@@ -108,16 +108,12 @@ update msg model =
 
     SendMessage ->
       let
-        (phxSocket, phxCmd) = Phoenix.Socket.join "rooms:lobby" userParams model.phxSocket
+        payload = (JE.object [ ("user", JE.string "frank"), ("body", JE.string model.newMessage) ])
       in
         ( { model
           | newMessage = ""
-          , phxSocket = phxSocket
           }
-        , Cmd.batch
-            [ Phoenix.Socket.send "rooms:lobby" "new:msg" (JE.object [ ("user", JE.string "frank"), ("body", JE.string model.newMessage) ]) phxSocket
-            , phxCmd
-            ]
+        , Phoenix.Socket.send "rooms:lobby" "new:msg" payload model.phxSocket
         )
 
     SetNewMessage str ->
@@ -130,6 +126,22 @@ update msg model =
       , Cmd.none
       )
 
+    JoinChannel ->
+      let
+        (phxSocket, phxCmd) = Phoenix.Socket.join "rooms:lobby" userParams model.phxSocket
+      in
+        ({ model | phxSocket = phxSocket }
+        , phxCmd
+        )
+
+    LeaveChannel ->
+      let
+        (phxSocket, phxCmd) = Phoenix.Socket.leave "rooms:lobby" model.phxSocket
+      in
+        ({ model | phxSocket = phxSocket }
+        , phxCmd
+        )      
+
     NoOp ->
       ( model, Cmd.none )
 
@@ -141,6 +153,12 @@ view : Model -> Html Msg
 view model =
   div []
     [ h1 [] [ text "Messages:" ]
+    , div
+        []
+        [ button [ onClick JoinChannel ] [ text "Join channel" ]
+        , button [ onClick LeaveChannel ] [ text "Leave channel" ]
+        ]
+    , br [] []
     , text (toString model.phxSocket.channels)
     , newMessageForm model
     , ul [] (List.map renderMessage model.messages)
