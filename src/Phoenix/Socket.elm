@@ -65,14 +65,14 @@ type Msg msg
   | HandleChannelError String (Cmd msg)
   | SetChannelState String ChannelState
 
--- HELPERS
-
 type alias Message =
   { topic : String
   , event : String
   , payload : JD.Value
   , ref : Maybe Int
   }
+
+-- DECODERS / ENCODERS
 
 nullOrInt : JD.Decoder (Maybe Int)
 nullOrInt =
@@ -113,6 +113,15 @@ encodeMessage =
 emptyPayload : JE.Value
 emptyPayload =
   JE.object []
+
+
+-- HELPERS
+
+{- Turns a msg into a Cmd msg -}
+
+forceDispatch : msg -> Cmd msg
+forceDispatch msg =
+  Task.perform identity identity (Task.succeed msg)
 
 -- SUBSCRIPTIONS
 
@@ -182,7 +191,7 @@ handlePhxClose : Socket msg -> Message -> Msg msg
 handlePhxClose socket message =
   SetChannelState message.topic ChannelClosed
 
--- COMMANDS
+-- PHOENIX COMMANDS
 
 join : String -> JE.Value -> Socket msg -> (Socket msg, Cmd msg)
 join channelName payload socket =
@@ -231,14 +240,6 @@ leave channelName socket =
     Nothing ->
       ( socket, Cmd.none )
 
-push : String -> String -> JE.Value -> Socket msg -> Cmd msg
-push topic event payload socket =
-  Message topic event payload (Just socket.ref)
-    |> encodeMessage
-    |> WebSocket.send socket.path
-
--- UPDATE
-
 on : String -> String -> JD.Decoder msg -> (String -> msg) -> Socket msg -> Socket msg
 on eventName channelName decoder onError socket =
   { socket
@@ -251,13 +252,13 @@ off eventName channelName socket =
   | events = Dict.remove (eventName, channelName) socket.events
   }
 
-setState : ChannelState -> Channel msg -> Channel msg
-setState state channel =
-  { channel | state = state }
+push : String -> String -> JE.Value -> Socket msg -> Cmd msg
+push topic event payload socket =
+  Message topic event payload (Just socket.ref)
+    |> encodeMessage
+    |> WebSocket.send socket.path
 
-withDebug : Socket msg -> Socket msg
-withDebug socket =
-  { socket | debug = True }
+-- UPDATE
 
 update : Msg msg -> Socket msg -> (Socket msg, Cmd msg)
 update msg sock =
@@ -282,6 +283,10 @@ update msg sock =
       NoOp ->
         ( socket, Cmd.none )
 
-forceDispatch : msg -> Cmd msg
-forceDispatch msg =
-  Task.perform identity identity (Task.succeed msg)
+setState : ChannelState -> Channel msg -> Channel msg
+setState state channel =
+  { channel | state = state }
+
+withDebug : Socket msg -> Socket msg
+withDebug socket =
+  { socket | debug = True }
