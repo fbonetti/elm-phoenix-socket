@@ -51,8 +51,8 @@ type alias Model =
 initPhxSocket : Phoenix.Socket.Socket Msg
 initPhxSocket =
   Phoenix.Socket.init socketServer
-    |> Phoenix.Socket.on "new:msg" "rooms:lobby" receivePhxMessageDecoder (always NoOp)
     |> Phoenix.Socket.withDebug
+    |> Phoenix.Socket.on "new:msg" "rooms:lobby" receivePhxMessageDecoder (always NoOp)
 
 initModel : Model
 initModel =
