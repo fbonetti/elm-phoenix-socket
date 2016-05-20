@@ -52,6 +52,7 @@ initPhxSocket : Phoenix.Socket.Socket Msg
 initPhxSocket =
   Phoenix.Socket.init socketServer
     |> Phoenix.Socket.on "new:msg" "rooms:lobby" receivePhxMessageDecoder (always NoOp)
+    |> Phoenix.Socket.withDebug
 
 initModel : Model
 initModel =
@@ -68,7 +69,7 @@ init =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-  Phoenix.Socket.events PhoenixMsg model.phxSocket
+  Phoenix.Socket.listen PhoenixMsg model.phxSocket
 
 -- COMMANDS
 
@@ -105,7 +106,7 @@ update msg model =
       let
         ( phxSocket, phxCmd ) = Phoenix.Socket.update msg model.phxSocket
       in
-        ( { model | phxSocket = phxSocket }, Cmd.map PhoenixMsg phxCmd )
+        ( { model | phxSocket = phxSocket }, phxCmd )
 
     SendMessage ->
       let

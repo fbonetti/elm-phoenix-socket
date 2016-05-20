@@ -1,16 +1,19 @@
-module Phoenix.Socket exposing (Socket, Msg, Message, init, join, joinWithOptions, leave, update, on, off, events, push)
+module Phoenix.Socket exposing (
+  Socket, Msg, Message, init, join, joinWithOptions,
+  leave, update, on, off, listen, push, withDebug)
 
 import Dict exposing (Dict)
+import Dict.Extra
 import WebSocket
 import Json.Encode as JE
 import Json.Decode as JD exposing ((:=))
-import Task
+import Task exposing (Task)
 
 -- MODEL
 
 init : String -> Socket msg
 init path =
-  Socket path (Dict.fromList []) (Dict.fromList [])
+  Socket path (Dict.fromList []) (Dict.fromList []) 0 False
 
 initChannel : ChannelState -> Channel msg
 initChannel state =
@@ -27,6 +30,8 @@ type alias Socket msg =
   { path : String
   , channels : Dict String (Channel msg)
   , events : Dict (String, String) (Event msg)
+  , ref : Int
+  , debug : Bool
   }
 
 type alias Channel msg =
@@ -56,8 +61,8 @@ type ChannelState
 
 type Msg msg
   = NoOp
-  | ExposeExternalMsg msg
-  | DispatchMultipleMsgs (List (Msg msg))
+  | DispatchEvent (Cmd msg)
+  | HandleChannelError String (Cmd msg)
   | SetChannelState String ChannelState
 
 -- HELPERS
@@ -112,22 +117,15 @@ emptyPayload =
 -- SUBSCRIPTIONS
 
 
-events : (Msg msg -> msg) -> Socket msg -> Sub msg
-events fn socket =
+listen : (Msg msg -> msg) -> Socket msg -> Sub msg
+listen fn socket =
   WebSocket.listen socket.path (handleMessage socket)
-    |> Sub.map (mapToExternalMsg fn)
-
-mapToExternalMsg : (Msg msg -> msg) -> Msg msg -> msg
-mapToExternalMsg fn msg =
-  case msg of
-    ExposeExternalMsg m ->
-      m
-    _ ->
-      fn msg
+    |> Sub.map fn
 
 handleMessage : Socket msg -> String -> Msg msg
-handleMessage socket strMessage =
-  case JD.decodeString messageDecoder strMessage of
+handleMessage socket strMess =
+  let strMessage = if socket.debug then Debug.log "phx_message" strMess else strMess
+  in case JD.decodeString messageDecoder strMessage of
     Ok message ->
       case message.event of
         "phx_reply" ->
@@ -138,7 +136,6 @@ handleMessage socket strMessage =
           handlePhxClose socket message
         _ ->
           handleEvent socket message
-
     Err error ->
       NoOp
 
@@ -146,13 +143,12 @@ handleEvent : Socket msg -> Message -> Msg msg
 handleEvent socket message =
   case Dict.get (message.event, message.topic) socket.events of
     Just {decoder,onError} ->
-      case JD.decodeValue decoder message.payload of
-        Ok msg ->
-          ExposeExternalMsg msg
-        Err error ->
-          ExposeExternalMsg (onError error)
+      DispatchEvent
+        (JD.decodeValue decoder message.payload
+          |> Task.fromResult
+          |> Task.perform onError identity)
     Nothing ->
-      NoOp  
+      NoOp
 
 statusDecoder : JD.Decoder String
 statusDecoder =
@@ -165,21 +161,16 @@ handlePhxReply socket message =
       case status of
         "ok" ->
           SetChannelState message.topic ChannelJoined
-        "error" ->
+        _ ->
           case Dict.get message.topic socket.channels of
             Just channel ->
               case channel.onError of
                 Just onError ->
-                  DispatchMultipleMsgs
-                    [ ExposeExternalMsg (onError message.payload)
-                    , SetChannelState message.topic ChannelErrored
-                    ]
+                  HandleChannelError message.topic (forceDispatch (onError message.payload))
                 Nothing ->
                   SetChannelState message.topic ChannelErrored
             Nothing ->
               NoOp
-        _ ->
-          NoOp
     Err error ->
       NoOp
 
@@ -242,7 +233,7 @@ leave channelName socket =
 
 push : String -> String -> JE.Value -> Socket msg -> Cmd msg
 push topic event payload socket =
-  Message topic event payload Nothing
+  Message topic event payload (Just socket.ref)
     |> encodeMessage
     |> WebSocket.send socket.path
 
@@ -264,27 +255,33 @@ setState : ChannelState -> Channel msg -> Channel msg
 setState state channel =
   { channel | state = state }
 
-update : Msg msg -> Socket msg -> (Socket msg, Cmd (Msg msg))
-update msg socket =
-  case msg of
-    SetChannelState channelName state ->
-      ({ socket
-      | channels = Dict.update channelName (Maybe.map (setState state)) socket.channels
-      }
-      , Cmd.none
-      )
-    DispatchMultipleMsgs msgs ->
-      ( socket, dispatchMultipleMsgs msgs )
-    ExposeExternalMsg msg ->
-      ( socket, Cmd.none )
-    NoOp ->
-      ( socket, Cmd.none )
+withDebug : Socket msg -> Socket msg
+withDebug socket =
+  { socket | debug = True }
 
+update : Msg msg -> Socket msg -> (Socket msg, Cmd msg)
+update msg sock =
+  let
+    socket = { sock | ref = sock.ref + 1 }
+  in
+    case msg of
+      SetChannelState channelName state ->
+        ({ socket
+        | channels = Dict.Extra.updateIfExists channelName (setState state) socket.channels
+        }
+        , Cmd.none
+        )
+      HandleChannelError channelName cmd ->
+        ({ socket
+        | channels = Dict.Extra.updateIfExists channelName (setState ChannelErrored) socket.channels
+        }
+        , cmd
+        )
+      DispatchEvent cmd ->
+        ( socket, cmd )
+      NoOp ->
+        ( socket, Cmd.none )
 
-dispatchMultipleMsgs : List (Msg msg) -> Cmd (Msg msg)
-dispatchMultipleMsgs =
-  List.map dispatchMsg >> Cmd.batch
-
-dispatchMsg : Msg msg -> Cmd (Msg msg)
-dispatchMsg =
-  Task.succeed >> Task.perform (always NoOp) identity
+forceDispatch : msg -> Cmd msg
+forceDispatch msg =
+  Task.perform identity identity (Task.succeed msg)
