@@ -51,7 +51,7 @@ type alias Model =
 initPhxSocket : Phoenix.Socket.Socket Msg
 initPhxSocket =
   Phoenix.Socket.init socketServer
-    |> Phoenix.Socket.on "new:msg" "rooms:lobby" receivePhxMessageDecoder
+    |> Phoenix.Socket.on "new:msg" "rooms:lobby" receivePhxMessageDecoder (always NoOp)
 
 initModel : Model
 initModel =
@@ -102,9 +102,10 @@ update msg model =
       )
 
     PhoenixMsg msg ->
-      ( { model | phxSocket = Phoenix.Socket.update msg model.phxSocket }
-      , Cmd.none
-      )
+      let
+        ( phxSocket, phxCmd ) = Phoenix.Socket.update msg model.phxSocket
+      in
+        ( { model | phxSocket = phxSocket }, Cmd.map PhoenixMsg phxCmd )
 
     SendMessage ->
       let
@@ -113,7 +114,7 @@ update msg model =
         ( { model
           | newMessage = ""
           }
-        , Phoenix.Socket.send "rooms:lobby" "new:msg" payload model.phxSocket
+        , Phoenix.Socket.push "rooms:lobby" "new:msg" payload model.phxSocket
         )
 
     SetNewMessage str ->

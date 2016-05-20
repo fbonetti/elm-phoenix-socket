@@ -1,9 +1,10 @@
-module Phoenix.Socket exposing (Socket, Msg, init, join, leave, update, on, events, send)
+module Phoenix.Socket exposing (Socket, Msg, Message, init, join, joinWithOptions, leave, update, on, off, events, push)
 
 import Dict exposing (Dict)
 import WebSocket
 import Json.Encode as JE
 import Json.Decode as JD exposing ((:=))
+import Task
 
 -- MODEL
 
@@ -13,7 +14,14 @@ init path =
 
 initChannel : ChannelState -> Channel msg
 initChannel state =
-  Channel state Nothing
+  Channel state Nothing Nothing Nothing
+
+defaultChannelOptions : ChannelOptions msg
+defaultChannelOptions =
+  { onJoin = Nothing
+  , onClose = Nothing
+  , onError = Nothing
+  }
 
 type alias Socket msg =
   { path : String
@@ -23,25 +31,34 @@ type alias Socket msg =
 
 type alias Channel msg =
   { state : ChannelState
-  , onError : Maybe (String -> msg)
+  , onJoin : Maybe (JE.Value -> msg)
+  , onClose : Maybe (JE.Value -> msg)
+  , onError : Maybe (JE.Value -> msg)
   }
 
 type alias Event msg =
   { decoder: JD.Decoder msg
-  , onError : Maybe (String -> msg)
+  , onError : String -> msg
+  }
+
+type alias ChannelOptions msg =
+  { onJoin : Maybe (JE.Value -> msg)
+  , onClose : Maybe (JE.Value -> msg)
+  , onError : Maybe (JE.Value -> msg)
   }
 
 type ChannelState
-    = ChannelClosed
-    | ChannelErrored
-    | ChannelJoined
-    | ChannelJoining
-    | ChannelLeaving
+  = ChannelClosed
+  | ChannelErrored
+  | ChannelJoined
+  | ChannelJoining
+  | ChannelLeaving
 
 type Msg msg
-    = NoOp
-    | DispatchMessage msg
-    | SetChannelState String ChannelState
+  = NoOp
+  | ExposeExternalMsg msg
+  | DispatchMultipleMsgs (List (Msg msg))
+  | SetChannelState String ChannelState
 
 -- HELPERS
 
@@ -103,15 +120,14 @@ events fn socket =
 mapToExternalMsg : (Msg msg -> msg) -> Msg msg -> msg
 mapToExternalMsg fn msg =
   case msg of
-    DispatchMessage m ->
+    ExposeExternalMsg m ->
       m
     _ ->
       fn msg
 
 handleMessage : Socket msg -> String -> Msg msg
 handleMessage socket strMessage =
-  let a = Debug.log "rawMessage" strMessage
-  in case JD.decodeString messageDecoder strMessage of
+  case JD.decodeString messageDecoder strMessage of
     Ok message ->
       case message.event of
         "phx_reply" ->
@@ -119,7 +135,7 @@ handleMessage socket strMessage =
         "phx_error" ->
           handlePhxError socket message
         "phx_close" ->
-          handlePhxClose message socket
+          handlePhxClose socket message
         _ ->
           handleEvent socket message
 
@@ -129,12 +145,12 @@ handleMessage socket strMessage =
 handleEvent : Socket msg -> Message -> Msg msg
 handleEvent socket message =
   case Dict.get (message.event, message.topic) socket.events of
-    Just {decoder} ->
+    Just {decoder,onError} ->
       case JD.decodeValue decoder message.payload of
         Ok msg ->
-          DispatchMessage msg
+          ExposeExternalMsg msg
         Err error ->
-          NoOp
+          ExposeExternalMsg (onError error)
     Nothing ->
       NoOp  
 
@@ -150,7 +166,18 @@ handlePhxReply socket message =
         "ok" ->
           SetChannelState message.topic ChannelJoined
         "error" ->
-          SetChannelState message.topic ChannelErrored
+          case Dict.get message.topic socket.channels of
+            Just channel ->
+              case channel.onError of
+                Just onError ->
+                  DispatchMultipleMsgs
+                    [ ExposeExternalMsg (onError message.payload)
+                    , SetChannelState message.topic ChannelErrored
+                    ]
+                Nothing ->
+                  SetChannelState message.topic ChannelErrored
+            Nothing ->
+              NoOp
         _ ->
           NoOp
     Err error ->
@@ -160,26 +187,45 @@ handlePhxError : Socket msg -> Message -> Msg msg
 handlePhxError socket message =
   SetChannelState message.topic ChannelErrored
 
-handlePhxClose : Message -> Socket msg -> Msg msg
-handlePhxClose message socket =
+handlePhxClose : Socket msg -> Message -> Msg msg
+handlePhxClose socket message =
   SetChannelState message.topic ChannelClosed
 
 -- COMMANDS
 
 join : String -> JE.Value -> Socket msg -> (Socket msg, Cmd msg)
-join channelName params socket =
+join channelName payload socket =
+  joinWithOptions channelName payload defaultChannelOptions socket
+
+joinWithOptions : String -> JE.Value -> ChannelOptions msg -> Socket msg -> (Socket msg, Cmd msg)
+joinWithOptions channelName payload channelOptions socket =
   case Dict.get channelName socket.channels of
     Just channel ->
       if channel.state == ChannelJoining || channel.state == ChannelJoined then
         ( socket, Cmd.none )
       else
-        ( { socket | channels = Dict.insert channelName { channel | state = ChannelJoining } socket.channels }
-        , send channelName "phx_join" params socket
+        ( { socket
+          | channels =
+              Dict.insert channelName (updateChannelWithOptions channelOptions channel) socket.channels
+          }
+        , push channelName "phx_join" payload socket
         )
     Nothing ->
-      ( { socket | channels = Dict.insert channelName (initChannel ChannelJoining) socket.channels }
-      , send channelName "phx_join" params socket
+      ( { socket
+        | channels =
+            Dict.insert channelName (updateChannelWithOptions channelOptions (initChannel ChannelJoining)) socket.channels
+        }
+      , push channelName "phx_join" payload socket
       )
+
+updateChannelWithOptions : ChannelOptions msg -> Channel msg -> Channel msg
+updateChannelWithOptions {onJoin,onClose,onError} channel =
+  { channel
+  | onJoin = onJoin
+  , onClose = onClose
+  , onError = onError
+  }
+
 
 leave : String -> Socket msg -> (Socket msg, Cmd msg)
 leave channelName socket =
@@ -187,39 +233,58 @@ leave channelName socket =
     Just channel ->
       if channel.state == ChannelJoined || channel.state == ChannelJoining then
         ( { socket | channels = Dict.insert channelName { channel | state = ChannelLeaving } socket.channels }
-        , send channelName "phx_leave" emptyPayload socket
+        , push channelName "phx_leave" emptyPayload socket
         )
       else
         ( socket, Cmd.none )
     Nothing ->
       ( socket, Cmd.none )
 
-send : String -> String -> JE.Value -> Socket msg -> Cmd msg
-send topic event payload socket =
+push : String -> String -> JE.Value -> Socket msg -> Cmd msg
+push topic event payload socket =
   Message topic event payload Nothing
     |> encodeMessage
     |> WebSocket.send socket.path
 
 -- UPDATE
 
-on : String -> String -> JD.Decoder msg -> Socket msg -> Socket msg
-on eventName channelName decoder socket =
+on : String -> String -> JD.Decoder msg -> (String -> msg) -> Socket msg -> Socket msg
+on eventName channelName decoder onError socket =
   { socket
-  | events = Dict.insert (eventName, channelName) (Event decoder Nothing) socket.events
+  | events = Dict.insert (eventName, channelName) (Event decoder onError) socket.events
+  }
+
+off : String -> String -> Socket msg -> Socket msg
+off eventName channelName socket =
+  { socket
+  | events = Dict.remove (eventName, channelName) socket.events
   }
 
 setState : ChannelState -> Channel msg -> Channel msg
 setState state channel =
   { channel | state = state }
 
-update : Msg msg -> Socket msg -> Socket msg
+update : Msg msg -> Socket msg -> (Socket msg, Cmd (Msg msg))
 update msg socket =
   case msg of
     SetChannelState channelName state ->
-      { socket
+      ({ socket
       | channels = Dict.update channelName (Maybe.map (setState state)) socket.channels
       }
-    DispatchMessage _ ->
-      socket
+      , Cmd.none
+      )
+    DispatchMultipleMsgs msgs ->
+      ( socket, dispatchMultipleMsgs msgs )
+    ExposeExternalMsg msg ->
+      ( socket, Cmd.none )
     NoOp ->
-      socket
+      ( socket, Cmd.none )
+
+
+dispatchMultipleMsgs : List (Msg msg) -> Cmd (Msg msg)
+dispatchMultipleMsgs =
+  List.map dispatchMsg >> Cmd.batch
+
+dispatchMsg : Msg msg -> Cmd (Msg msg)
+dispatchMsg =
+  Task.succeed >> Task.perform (always NoOp) identity
