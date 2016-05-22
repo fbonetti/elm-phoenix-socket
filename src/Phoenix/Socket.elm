@@ -1,4 +1,4 @@
-module Phoenix.Socket
+module Phoenix.Socket --where
   exposing
     ( Socket
     , Msg

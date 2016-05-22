@@ -1,4 +1,4 @@
-module Chat exposing (..)
+module Chat exposing (..) --where
 
 import Html exposing (Html, h1, div, text, ul, li, input, form, button, br)
 import Html.Attributes exposing (type', value)
