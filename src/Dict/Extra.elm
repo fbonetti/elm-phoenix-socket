@@ -1,4 +1,4 @@
-module Dict.Extra exposing (insertUnlessExists, updateIfExists) --where
+module Dict.Extra exposing (insertUnlessExists, updateIfExists)
 
 import Dict exposing (Dict)
 

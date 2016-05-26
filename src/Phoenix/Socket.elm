@@ -1,4 +1,4 @@
-module Phoenix.Socket --where
+module Phoenix.Socket
   exposing
     ( Socket
     , Msg
@@ -6,6 +6,7 @@ module Phoenix.Socket --where
     , init
     , join
     , joinWithOptions
+    , defaultChannelOptions
     , leave
     , update
     , on
@@ -15,6 +16,22 @@ module Phoenix.Socket --where
     , withDebug
     )
 
+{-| This library is a pure Elm implementation of the Phoenix.Socket library
+that comes bundled with the Phoenix web framework. It aims to abstract away
+the more tedious bits of communicating with Phoenix, such as joining channels,
+leaving channels, registering event handlers, and handling errors.
+
+# Socket
+@docs Socket, Msg, Message, init, update, listen, push, withDebug
+
+# Channels
+@docs join, joinWithOptions, defaultChannelOptions, leave
+
+# Events
+@docs on, off
+
+-}
+
 import Dict exposing (Dict)
 import Dict.Extra
 import WebSocket
@@ -22,9 +39,8 @@ import Json.Encode as JE
 import Json.Decode as JD exposing ((:=))
 import Task exposing (Task)
 
-
--- MODEL
-
+{-| Initializes a `Socket` with the given path
+-}
 
 init : String -> Socket msg
 init path =
@@ -35,6 +51,8 @@ initChannel : ChannelState -> Channel msg
 initChannel state =
   Channel state Nothing Nothing Nothing
 
+{-| By default, onJoin, onClose, and onError are set to `Nothing`
+-}
 
 defaultChannelOptions : ChannelOptions msg
 defaultChannelOptions =
@@ -43,6 +61,8 @@ defaultChannelOptions =
   , onError = Nothing
   }
 
+{-| Stores channels, event handlers, and configuration options
+-}
 
 type alias Socket msg =
   { path : String
@@ -81,14 +101,14 @@ type ChannelState
   | ChannelJoining
   | ChannelLeaving
 
-
+{-|-}
 type Msg msg
   = NoOp
   | DispatchEvent (Cmd msg)
   | HandleChannelError String (Cmd msg)
   | SetChannelState String ChannelState
 
-
+{-|-}
 type alias Message =
   { topic : String
   , event : String
@@ -150,6 +170,7 @@ emptyPayload =
 
 
 -- HELPERS
+
 {- Turns a msg into a Cmd msg -}
 
 
@@ -161,12 +182,12 @@ forceDispatch msg =
 
 -- SUBSCRIPTIONS
 
-
+{-| Listens for phoenix messages and converts them into type `msg`
+-}
 listen : (Msg msg -> msg) -> Socket msg -> Sub msg
 listen fn socket =
   WebSocket.listen socket.path (handleMessage socket)
     |> Sub.map fn
-
 
 handleMessage : Socket msg -> String -> Msg msg
 handleMessage socket strMess =
@@ -253,12 +274,23 @@ handlePhxClose socket message =
 
 -- PHOENIX COMMANDS
 
+{-| Joins a channel with the given payload
 
+    payload = Json.Encode.object [ ("user_id", Json.Encode.string "123") ]
+    (phxSocket, phxCmd) = join "rooms:lobby" payload socket
+
+-}
 join : String -> JE.Value -> Socket msg -> ( Socket msg, Cmd msg )
 join channelName payload socket =
   joinWithOptions channelName payload defaultChannelOptions socket
 
+{-| Joins a channel with addition options
 
+    payload = Json.Encode.object [ ("user_id", Json.Encode.string "123") ]
+    channelOptions = { defaultChannelOptions | onError = Just HandleError }
+    (phxSocket, phxCmd) = join "rooms:lobby" payload channelOptions socket
+
+-}
 joinWithOptions : String -> JE.Value -> ChannelOptions msg -> Socket msg -> ( Socket msg, Cmd msg )
 joinWithOptions channelName payload channelOptions socket =
   case Dict.get channelName socket.channels of
@@ -290,7 +322,11 @@ updateChannelWithOptions { onJoin, onClose, onError } channel =
     , onError = onError
   }
 
+{-| Leaves a channel
 
+    (phxSocket, phxCmd) = leave "rooms:lobby" socket
+
+-}
 leave : String -> Socket msg -> ( Socket msg, Cmd msg )
 leave channelName socket =
   case Dict.get channelName socket.channels of
@@ -305,21 +341,37 @@ leave channelName socket =
     Nothing ->
       ( socket, Cmd.none )
 
+{-| Register an event handler
 
+  socket
+    |> on "new:msg" "rooms:lobby" chatMessageDecoder errorToMsg
+    |> on "alert:msg" "rooms:lobby" alertMessageDecoder errorToMsg
+
+-}
 on : String -> String -> JD.Decoder msg -> (String -> msg) -> Socket msg -> Socket msg
 on eventName channelName decoder onError socket =
   { socket
     | events = Dict.insert ( eventName, channelName ) (Event decoder onError) socket.events
   }
 
+{-| Remove an event handler
 
+  socket
+    |> off "new:msg" "rooms:lobby"
+    |> off "alert:msg" "rooms:lobby"
+
+-}
 off : String -> String -> Socket msg -> Socket msg
 off eventName channelName socket =
   { socket
     | events = Dict.remove ( eventName, channelName ) socket.events
   }
 
+{-| Send a message
 
+  push "rooms:lobby" "new:msg" payload socket
+
+-}
 push : String -> String -> JE.Value -> Socket msg -> Cmd msg
 push topic event payload socket =
   Message topic event payload (Just socket.ref)
@@ -330,7 +382,8 @@ push topic event payload socket =
 
 -- UPDATE
 
-
+{-| Updates the `Socket` in order to keep track of channel state
+-}
 update : Msg msg -> Socket msg -> ( Socket msg, Cmd msg )
 update msg sock =
   let
@@ -363,7 +416,12 @@ setState : ChannelState -> Channel msg -> Channel msg
 setState state channel =
   { channel | state = state }
 
+{-| When enabled, prints all incoming Phoenix messages to the console
 
+  socket
+    |> withDebug
+
+-}
 withDebug : Socket msg -> Socket msg
 withDebug socket =
   { socket | debug = True }
