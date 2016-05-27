@@ -105,7 +105,6 @@ type ChannelState
 type Msg msg
   = NoOp
   | ExternalMsg msg
-  | HandleChannelError String (Cmd msg)
   | SetChannelState String ChannelState
 
 {-|-}
@@ -424,13 +423,6 @@ update msg sock =
             | channels = Dict.Extra.updateIfExists channelName (setState state) socket.channels
           }
         , Cmd.none
-        )
-
-      HandleChannelError channelName cmd ->
-        ( { socket
-            | channels = Dict.Extra.updateIfExists channelName (setState ChannelErrored) socket.channels
-          }
-        , cmd
         )
 
       ExternalMsg msg ->
