@@ -37,7 +37,7 @@ import Dict.Extra
 import WebSocket
 import Json.Encode as JE
 import Json.Decode as JD exposing ((:=))
-import Task exposing (Task)
+import Result
 
 {-| Initializes a `Socket` with the given path
 -}
@@ -104,7 +104,7 @@ type ChannelState
 {-|-}
 type Msg msg
   = NoOp
-  | DispatchEvent (Cmd msg)
+  | ExternalMsg msg
   | HandleChannelError String (Cmd msg)
   | SetChannelState String ChannelState
 
@@ -171,61 +171,96 @@ emptyPayload =
 
 -- HELPERS
 
-{- Turns a msg into a Cmd msg -}
-
-
-forceDispatch : msg -> Cmd msg
-forceDispatch msg =
-  Task.perform identity identity (Task.succeed msg)
-
-
-
 -- SUBSCRIPTIONS
 
 {-| Listens for phoenix messages and converts them into type `msg`
 -}
 listen : (Msg msg -> msg) -> Socket msg -> Sub msg
 listen fn socket =
-  WebSocket.listen socket.path (handleMessage socket)
-    |> Sub.map fn
+  (Sub.batch >> Sub.map (mapAll fn))
+    [ internalMsgs socket
+    , externalMsgs socket
+    ]
 
-handleMessage : Socket msg -> String -> Msg msg
-handleMessage socket strMess =
-  let
-    strMessage =
-      if socket.debug then
-        Debug.log "phx_message" strMess
-      else
-        strMess
-  in
-    case JD.decodeString messageDecoder strMessage of
-      Ok message ->
-        case message.event of
-          "phx_reply" ->
-            handlePhxReply socket message
+mapAll : (Msg msg -> msg) -> Msg msg -> msg
+mapAll fn internalMsg =
+  case internalMsg of
+    ExternalMsg msg ->
+      msg
+    _ ->
+      fn internalMsg
 
-          "phx_error" ->
-            handlePhxError socket message
 
-          "phx_close" ->
-            handlePhxClose socket message
+phoenixMessages : Socket msg -> Sub (Maybe Message)
+phoenixMessages socket =
+  WebSocket.listen socket.path (debugIfEnabled socket >> decodeMessage)
 
-          _ ->
-            handleEvent socket message
+debugIfEnabled : Socket msg -> String -> String
+debugIfEnabled socket =
+  if socket.debug then
+    Debug.log "phx_message"
+  else
+    identity
 
-      Err error ->
-        NoOp
+decodeMessage : String -> Maybe Message
+decodeMessage =
+  JD.decodeString messageDecoder >> Result.toMaybe
+
+externalMsgs : Socket msg -> Sub (Msg msg)
+externalMsgs socket =
+  Sub.map (mapExternalMsgs socket) (phoenixMessages socket)
+
+mapExternalMsgs : Socket msg -> Maybe Message -> Msg msg
+mapExternalMsgs socket maybeMessage =
+  case maybeMessage of
+    Just message ->
+      case message.event of
+        "phx_reply" ->
+          NoOp
+        "phx_error" ->
+          NoOp
+        "phx_close" ->
+          NoOp
+        _ ->
+          handleEvent socket message
+
+    Nothing ->
+      NoOp
+
+
+internalMsgs : Socket msg -> Sub (Msg msg)
+internalMsgs socket =
+  Sub.map (mapInternalMsgs socket) (phoenixMessages socket)
+
+mapInternalMsgs : Socket msg -> Maybe Message -> Msg msg
+mapInternalMsgs socket maybeMessage =
+  case maybeMessage of
+    Just message ->
+      case message.event of
+        "phx_reply" ->
+          handlePhxReply socket message
+
+        "phx_error" ->
+          handlePhxError socket message
+
+        "phx_close" ->
+          handlePhxClose socket message
+        _ ->
+          NoOp
+
+    Nothing ->
+      NoOp
 
 
 handleEvent : Socket msg -> Message -> Msg msg
 handleEvent socket message =
   case Dict.get ( message.event, message.topic ) socket.events of
     Just { decoder, onError } ->
-      DispatchEvent
-        (JD.decodeValue decoder message.payload
-          |> Task.fromResult
-          |> Task.perform onError identity
-        )
+      case (JD.decodeValue decoder message.payload) of
+        Ok msg ->
+          ExternalMsg msg
+        Err error ->
+          ExternalMsg (onError error)
 
     Nothing ->
       NoOp
@@ -245,17 +280,10 @@ handlePhxReply socket message =
           SetChannelState message.topic ChannelJoined
 
         _ ->
-          case Dict.get message.topic socket.channels of
-            Just channel ->
-              case channel.onError of
-                Just onError ->
-                  HandleChannelError message.topic (forceDispatch (onError message.payload))
-
-                Nothing ->
-                  SetChannelState message.topic ChannelErrored
-
-            Nothing ->
-              NoOp
+          if Dict.member message.topic socket.channels then
+            SetChannelState message.topic ChannelErrored
+          else
+            NoOp
 
     Err error ->
       NoOp
@@ -405,8 +433,8 @@ update msg sock =
         , cmd
         )
 
-      DispatchEvent cmd ->
-        ( socket, cmd )
+      ExternalMsg msg ->
+        ( socket, Cmd.none )
 
       NoOp ->
         ( socket, Cmd.none )
