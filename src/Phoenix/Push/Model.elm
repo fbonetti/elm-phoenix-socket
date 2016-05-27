@@ -4,12 +4,13 @@ import Phoenix.Helpers exposing (emptyPayload)
 import Json.Encode as JE
 
 type alias Model msg =
-  { channel : String
-  , event : String
+  { event : String
+  , channel : String
   , payload : JE.Value
+  , onOk : Maybe (JE.Value -> msg)
   , onError : Maybe (JE.Value -> msg)
   }
 
 init : String -> String -> Model msg
-init channel event =
-  Model channel event emptyPayload Nothing
+init event channel =
+  Model event channel emptyPayload Nothing Nothing

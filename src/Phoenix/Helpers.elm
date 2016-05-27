@@ -4,8 +4,8 @@ import Json.Decode as JD exposing ((:=))
 import Json.Encode as JE
 
 type alias Message =
-  { topic : String
-  , event : String
+  { event : String
+  , topic : String
   , payload : JD.Value
   , ref : Maybe Int
   }
@@ -31,8 +31,8 @@ maybeInt maybe =
 messageDecoder : JD.Decoder Message
 messageDecoder =
   JD.object4 Message
-    ("topic" := JD.string)
     ("event" := JD.string)
+    ("topic" := JD.string)
     ("payload" := JD.value)
     ("ref" := nullOrInt)
 
@@ -40,8 +40,8 @@ messageDecoder =
 messageEncoder : Message -> JE.Value
 messageEncoder { topic, event, payload, ref } =
   JE.object
-    [ ( "topic", JE.string topic )
-    , ( "event", JE.string event )
+    [ ( "event", JE.string event )
+    , ( "topic", JE.string topic )
     , ( "payload", payload )
     , ( "ref", maybeInt ref )
     ]
