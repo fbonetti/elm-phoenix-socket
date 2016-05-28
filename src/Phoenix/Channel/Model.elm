@@ -7,7 +7,6 @@ type alias Model msg =
   { name : String
   , payload : JE.Value
   , state : State
-  , onJoin : Maybe (JE.Value -> msg)
   , onClose : Maybe (JE.Value -> msg)
   , onError : Maybe (JE.Value -> msg)
   }
@@ -21,4 +20,4 @@ type State
 
 init : String -> Model msg
 init name =
-  Model name emptyPayload Closed Nothing Nothing Nothing
+  Model name emptyPayload Closed Nothing Nothing

@@ -1,4 +1,6 @@
-module Phoenix.Socket
+-- Delete this file
+
+module Phoenix.SocketOld
   exposing
     ( Socket
     , Msg
