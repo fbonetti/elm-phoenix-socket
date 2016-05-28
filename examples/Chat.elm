@@ -5,7 +5,7 @@ import Html.Attributes exposing (type', value)
 import Html.Events exposing (onInput, onSubmit, onClick)
 import Html.App
 import Platform.Cmd
-import Phoenix.Socket
+import Phoenix.SocketOld
 import Json.Encode as JE
 import Json.Decode as JD exposing ((:=))
 
@@ -35,7 +35,7 @@ type Msg
   = ReceiveMessage String
   | SendMessage
   | SetNewMessage String
-  | PhoenixMsg (Phoenix.Socket.Msg Msg)
+  | PhoenixMsg (Phoenix.SocketOld.Msg Msg)
   | ReceivePhxMessage ChatMessage
   | JoinChannel
   | LeaveChannel
@@ -45,14 +45,14 @@ type Msg
 type alias Model =
   { newMessage : String
   , messages : List String
-  , phxSocket : Phoenix.Socket.Socket Msg
+  , phxSocket : Phoenix.SocketOld.Socket Msg
   }
 
-initPhxSocket : Phoenix.Socket.Socket Msg
+initPhxSocket : Phoenix.SocketOld.Socket Msg
 initPhxSocket =
-  Phoenix.Socket.init socketServer
-    |> Phoenix.Socket.withDebug
-    |> Phoenix.Socket.on "new:msg" "rooms:lobby" receivePhxMessageDecoder (always NoOp)
+  Phoenix.SocketOld.init socketServer
+    |> Phoenix.SocketOld.withDebug
+    |> Phoenix.SocketOld.on "new:msg" "rooms:lobby" receivePhxMessageDecoder (always NoOp)
 
 initModel : Model
 initModel =
@@ -69,7 +69,7 @@ init =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-  Phoenix.Socket.listen PhoenixMsg model.phxSocket
+  Phoenix.SocketOld.listen PhoenixMsg model.phxSocket
 
 -- COMMANDS
 
@@ -104,7 +104,7 @@ update msg model =
 
     PhoenixMsg msg ->
       let
-        ( phxSocket, phxCmd ) = Phoenix.Socket.update msg model.phxSocket
+        ( phxSocket, phxCmd ) = Phoenix.SocketOld.update msg model.phxSocket
       in
         ( { model | phxSocket = phxSocket }, phxCmd )
 
@@ -115,7 +115,7 @@ update msg model =
         ( { model
           | newMessage = ""
           }
-        , Phoenix.Socket.push "rooms:lobby" "new:msg" payload model.phxSocket
+        , Phoenix.SocketOld.push "rooms:lobby" "new:msg" payload model.phxSocket
         )
 
     SetNewMessage str ->
@@ -130,7 +130,7 @@ update msg model =
 
     JoinChannel ->
       let
-        (phxSocket, phxCmd) = Phoenix.Socket.join "rooms:lobby" userParams model.phxSocket
+        (phxSocket, phxCmd) = Phoenix.SocketOld.join "rooms:123" userParams model.phxSocket
       in
         ({ model | phxSocket = phxSocket }
         , phxCmd
@@ -138,7 +138,7 @@ update msg model =
 
     LeaveChannel ->
       let
-        (phxSocket, phxCmd) = Phoenix.Socket.leave "rooms:lobby" model.phxSocket
+        (phxSocket, phxCmd) = Phoenix.SocketOld.leave "rooms:lobby" model.phxSocket
       in
         ({ model | phxSocket = phxSocket }
         , phxCmd
