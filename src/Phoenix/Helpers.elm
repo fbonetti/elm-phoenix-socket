@@ -2,6 +2,7 @@ module Phoenix.Helpers exposing (..)
 
 import Json.Decode as JD exposing ((:=))
 import Json.Encode as JE
+import Task
 
 type alias Message =
   { event : String
@@ -55,3 +56,7 @@ encodeMessage =
 emptyPayload : JE.Value
 emptyPayload =
   JE.object []
+
+forceCmd : a -> Cmd a
+forceCmd =
+  Task.perform identity identity << Task.succeed

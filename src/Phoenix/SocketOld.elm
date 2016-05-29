@@ -35,11 +35,19 @@ leaving channels, registering event handlers, and handling errors.
 -}
 
 import Dict exposing (Dict)
-import Dict.Extra
 import WebSocket
 import Json.Encode as JE
 import Json.Decode as JD exposing ((:=))
 import Result
+
+insertUnlessExists : comparable -> v -> Dict comparable v -> Dict comparable v
+insertUnlessExists key value =
+  Dict.update key (Maybe.withDefault value >> Just)
+
+
+updateIfExists : comparable -> (v -> v) -> Dict comparable v -> Dict comparable v
+updateIfExists key fn =
+  Dict.update key (Maybe.map fn)
 
 {-| Initializes a `Socket` with the given path
 -}
@@ -422,7 +430,7 @@ update msg sock =
     case msg of
       SetChannelState channelName state ->
         ( { socket
-            | channels = Dict.Extra.updateIfExists channelName (setState state) socket.channels
+            | channels = updateIfExists channelName (setState state) socket.channels
           }
         , Cmd.none
         )

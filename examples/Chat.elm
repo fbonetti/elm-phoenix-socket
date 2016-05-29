@@ -130,7 +130,7 @@ update msg model =
 
     JoinChannel ->
       let
-        (phxSocket, phxCmd) = Phoenix.SocketOld.join "rooms:123" userParams model.phxSocket
+        (phxSocket, phxCmd) = Phoenix.SocketOld.join "rooms:lobby" userParams model.phxSocket
       in
         ({ model | phxSocket = phxSocket }
         , phxCmd

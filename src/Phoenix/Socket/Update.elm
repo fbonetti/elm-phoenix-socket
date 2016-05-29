@@ -4,26 +4,41 @@ import Phoenix.Socket.Model exposing (Model)
 import Phoenix.Channel.Model as Channel
 import Phoenix.Channel.Update exposing (setState)
 import Phoenix.Push.Model as Push
-import Phoenix.Helpers exposing (Message, encodeMessage, emptyPayload)
+import Phoenix.Helpers exposing (Message, encodeMessage, emptyPayload, forceCmd)
 import Dict
-import Dict.Extra
 import WebSocket
 import Json.Encode as JE
 
 type Msg msg
   = NoOp
   | ExternalMsg msg
-  | SetChannelState String Channel.State
+  | ChannelError String JE.Value
+  | ChannelClose String JE.Value
 
-update : Msg msg -> Model msg -> ( Model msg, Cmd a )
+update : Msg msg -> Model msg -> ( Model msg, Cmd (Msg msg) )
 update msg socket =
   case msg of
-    SetChannelState channelName state ->
-      ( { socket
-          | channels = Dict.Extra.updateIfExists channelName (setState state) socket.channels
-        }
-      , Cmd.none
-      )
+    ChannelError channelName payload ->
+      case Dict.get channelName socket.channels of
+        Just channel ->
+          let
+            socket' = { socket | channels = Dict.insert channelName (setState Channel.Errored channel) socket.channels }
+            outgoingMsg = (Maybe.map (\f -> ExternalMsg (f payload)) >> Maybe.withDefault NoOp) channel.onError
+          in
+            ( socket', forceCmd outgoingMsg )
+        Nothing ->
+          ( socket, Cmd.none )
+
+    ChannelClose channelName payload ->
+      case Dict.get channelName socket.channels of
+        Just channel ->
+          let
+            socket' = { socket | channels = Dict.insert channelName (setState Channel.Closed channel) socket.channels }
+            outgoingMsg = (Maybe.map (\f -> ExternalMsg (f payload)) >> Maybe.withDefault NoOp) channel.onClose
+          in
+            ( socket', forceCmd outgoingMsg )
+        Nothing ->
+          ( socket, Cmd.none )
 
     ExternalMsg msg ->
       ( socket, Cmd.none )

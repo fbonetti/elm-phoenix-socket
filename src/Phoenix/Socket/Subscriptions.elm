@@ -5,7 +5,7 @@ import Phoenix.Socket.Update exposing (Msg(..))
 import Phoenix.Helpers exposing (Message, messageDecoder)
 import Phoenix.Channel.Model as Channel
 import WebSocket
-import Json.Decode as JD
+import Json.Decode as JD exposing ((:=))
 import Dict
 
 listen : (Msg msg -> msg) -> Model msg -> Sub msg
@@ -73,10 +73,10 @@ mapInternalMsgs socket maybeMessage =
           handlePhxReply socket message
 
         "phx_error" ->
-          handlePhxError socket message
+          ChannelError message.topic message.payload
 
         "phx_close" ->
-          handlePhxClose socket message
+          ChannelClose message.topic message.payload
         _ ->
           NoOp
 
@@ -87,42 +87,33 @@ mapInternalMsgs socket maybeMessage =
 handleEvent : Model msg -> Message -> Msg msg
 handleEvent socket message =
   case Dict.get ( message.event, message.topic ) socket.events of
-    Just onOk ->
-      ExternalMsg (onOk message.payload)
+    Just payloadToMsg ->
+      ExternalMsg (payloadToMsg message.payload)
 
     Nothing ->
       NoOp
 
-
-statusDecoder : JD.Decoder String
-statusDecoder =
-  JD.at [ "status" ] JD.string
+replyDecoder : JD.Decoder (String, JD.Value)
+replyDecoder =
+  JD.object2 (,)
+    ("status" := JD.string)
+    ("response" := JD.value)
 
 -- NOTE: This logic needs to be rewritten
 
 handlePhxReply : Model msg -> Message -> Msg msg
 handlePhxReply socket message =
-  case JD.decodeValue statusDecoder message.payload of
-    Ok status ->
+  case JD.decodeValue replyDecoder message.payload of
+    Ok ( status, response ) ->
       case status of
         "ok" ->
-          SetChannelState message.topic Channel.Joined
+          PushOk message.ref response
+
+        "error" ->
+          PushError message.ref response
 
         _ ->
-          if Dict.member message.topic socket.channels then
-            SetChannelState message.topic Channel.Errored
-          else
-            NoOp
+          NoOp
 
     Err error ->
       NoOp
-
-
-handlePhxError : Model msg -> Message -> Msg msg
-handlePhxError socket message =
-  SetChannelState message.topic Channel.Errored
-
-
-handlePhxClose : Model msg -> Message -> Msg msg
-handlePhxClose socket message =
-  SetChannelState message.topic Channel.Closed
