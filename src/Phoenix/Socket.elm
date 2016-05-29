@@ -321,20 +321,18 @@ handleInternalPhxReply socket message =
   let
     msg =
       Result.toMaybe (JD.decodeValue replyDecoder message.payload)
-        `andThen` \( status, response ) ->
-                    message.ref
-                      `andThen` \ref ->
-                                  Dict.get message.topic socket.channels
-                                    `andThen` \channel ->
-                                                if status == "ok" then
-                                                  if ref == channel.joinRef then
-                                                    Just (ChannelJoined message.topic)
-                                                  else if ref == channel.leaveRef then
-                                                    Just (ChannelClosed message.topic)
-                                                  else
-                                                    Nothing
-                                                else
-                                                  Nothing
+        `andThen` \( status, response ) -> message.ref
+        `andThen` \ref -> Dict.get message.topic socket.channels
+        `andThen` \channel ->
+          if status == "ok" then
+            if ref == channel.joinRef then
+              Just (ChannelJoined message.topic)
+            else if ref == channel.leaveRef then
+              Just (ChannelClosed message.topic)
+            else
+              Nothing
+          else
+            Nothing
   in
     Maybe.withDefault NoOp msg
 
@@ -397,20 +395,18 @@ handlePhxReply socket message =
   let
     msg =
       Result.toMaybe (JD.decodeValue replyDecoder message.payload)
-        `andThen` \( status, response ) ->
-                    message.ref
-                      `andThen` \ref ->
-                                  Dict.get ref socket.pushes
-                                    `andThen` \push ->
-                                                case status of
-                                                  "ok" ->
-                                                    Maybe.map (\f -> (ExternalMsg << f) response) push.onOk
+        `andThen` \( status, response ) -> message.ref
+        `andThen` \ref -> Dict.get ref socket.pushes
+        `andThen` \push ->
+          case status of
+            "ok" ->
+              Maybe.map (\f -> (ExternalMsg << f) response) push.onOk
 
-                                                  "error" ->
-                                                    Maybe.map (\f -> (ExternalMsg << f) response) push.onError
+            "error" ->
+              Maybe.map (\f -> (ExternalMsg << f) response) push.onError
 
-                                                  _ ->
-                                                    Nothing
+            _ ->
+              Nothing
   in
     Maybe.withDefault NoOp msg
 
