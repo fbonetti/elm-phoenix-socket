@@ -1,4 +1,23 @@
-module Phoenix.Socket exposing (..)
+module Phoenix.Socket exposing (Socket, Msg, init, update, withDebug, join, leave, push, on, off, listen)
+
+{-| This library is a pure Elm interpretation of the Phoenix.Socket library
+that comes bundled with the Phoenix web framework. It aims to abstract away
+the more tedious bits of communicating with Phoenix, such as joining channels,
+leaving channels, registering event handlers, and handling errors.
+
+# Socket
+@docs Socket, Msg, init, withDebug, update, listen
+
+# Channels
+@docs join, leave
+
+# Events
+@docs on, off
+
+# Sending messages
+@docs push
+
+-}
 
 import Phoenix.Channel as Channel exposing (Channel, setState)
 import Phoenix.Push as Push exposing (Push)
@@ -9,6 +28,9 @@ import Json.Encode as JE
 import Json.Decode as JD exposing ((:=))
 import Maybe exposing (andThen)
 
+{-| Stores channels, event handlers, and configuration options
+-}
+
 type alias Socket msg =
   { path : String
   , debug : Bool
@@ -18,6 +40,8 @@ type alias Socket msg =
   , ref : Int
   }
 
+{-|-}
+
 type Msg msg
   = NoOp
   | ExternalMsg msg
@@ -25,6 +49,9 @@ type Msg msg
   | ChannelClosed String
   | ChannelJoined String
   | ReceiveReply String Int
+
+{-| Initializes a `Socket` with the given path
+-}
 
 init : String -> Socket msg
 init path =
@@ -35,6 +62,8 @@ init path =
   , pushes = Dict.fromList []
   , ref = 0
   }
+
+{-|-}
 
 update : Msg msg -> Socket msg -> ( Socket msg, Cmd (Msg msg) )
 update msg socket =
@@ -82,6 +111,14 @@ withDebug : Socket msg -> Socket msg
 withDebug socket =
   { socket | debug = True }
 
+{-| Joins a channel
+
+    payload = Json.Encode.object [ ("user_id", Json.Encode.string "123") ]
+    channel = Channel.init "rooms:lobby" |> Channel.withPayload payload
+    (socket', cmd) = join channel socket
+
+-}
+
 join : Channel msg -> Socket msg -> (Socket msg, Cmd (Msg msg))
 join channel socket =
   if channel.state == Channel.Leaving then
@@ -96,6 +133,12 @@ join channel socket =
         }
     in
       push push' socket'
+
+{-| Leaves a channel
+
+    (socket', cmd) = leave "rooms:lobby" socket
+
+-}
 
 leave : String -> Socket msg -> ( Socket msg, Cmd (Msg msg) )
 leave channelName socket =
@@ -114,6 +157,13 @@ leave channelName socket =
     Nothing ->
       ( socket, Cmd.none )
 
+{-| Pushes a message
+
+  push' = Phoenix.Push.init "new:msg" "rooms:lobby"
+  (socket', cmd) = push push' socket
+
+-}
+
 push : Push msg -> Socket msg -> (Socket msg, Cmd (Msg msg))
 push push' socket =
   ( { socket
@@ -123,12 +173,27 @@ push push' socket =
   , send socket push'.event push'.channel push'.payload
   )
 
+{-| Registers an event handler
+
+  socket
+    |> on "new:msg" "rooms:lobby" ReceiveChatMessage
+    |> on "alert:msg" "rooms:lobby" ReceiveAlertMessage
+
+-}
 
 on : String -> String -> (JE.Value -> msg) -> Socket msg -> Socket msg
 on eventName channelName onReceive socket =
   { socket
     | events = Dict.insert ( eventName, channelName ) onReceive socket.events
   }
+
+{-| Removes an event handler
+
+  socket
+    |> off "new:msg" "rooms:lobby"
+    |> off "alert:msg" "rooms:lobby"
+
+-}
 
 off : String -> String -> Socket msg -> Socket msg
 off eventName channelName socket =
@@ -148,6 +213,9 @@ sendMessage path message =
 
 -- SUBSCRIPTIONS
 
+{-| Listens for phoenix messages and converts them into type `msg`
+-}
+
 listen : (Msg msg -> msg) -> Socket msg -> Sub msg
 listen fn socket =
   (Sub.batch >> Sub.map (mapAll fn))
@@ -165,7 +233,7 @@ mapAll fn internalMsg =
 
 phoenixMessages : Socket msg -> Sub (Maybe Message)
 phoenixMessages socket =
-  WebSocket.listen socket.path (debugIfEnabled socket >> decodeMessage)
+  WebSocket.listen socket.path decodeMessage
 
 debugIfEnabled : Socket msg -> String -> String
 debugIfEnabled socket =
@@ -185,18 +253,21 @@ internalMsgs socket =
 mapInternalMsgs : Socket msg -> Maybe Message -> Msg msg
 mapInternalMsgs socket maybeMessage =
   case maybeMessage of
-    Just message ->
-      case message.event of
-        "phx_reply" ->
-          handleInternalPhxReply socket message
+    Just mess ->
+      let
+        message = if socket.debug then Debug.log "Phoenix message" message else mess
+      in
+        case message.event of
+          "phx_reply" ->
+            handleInternalPhxReply socket message
 
-        "phx_error" ->
-          ChannelErrored message.topic
+          "phx_error" ->
+            ChannelErrored message.topic
 
-        "phx_close" ->
-          ChannelClosed message.topic
-        _ ->
-          NoOp
+          "phx_close" ->
+            ChannelClosed message.topic
+          _ ->
+            NoOp
 
     Nothing ->
       NoOp

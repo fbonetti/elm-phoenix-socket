@@ -6,8 +6,8 @@ import Html.Events exposing (onInput, onSubmit, onClick)
 import Html.App
 import Platform.Cmd
 import Phoenix.Socket
-import Phoenix.Push
 import Phoenix.Channel
+import Phoenix.Push
 import Json.Encode as JE
 import Json.Decode as JD exposing ((:=))
 
