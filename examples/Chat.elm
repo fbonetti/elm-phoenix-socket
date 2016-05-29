@@ -1,6 +1,6 @@
 module Chat exposing (..) --where
 
-import Html exposing (Html, h1, div, text, ul, li, input, form, button, br)
+import Html exposing (Html, h3, div, text, ul, li, input, form, button, br, table, tbody, tr, td)
 import Html.Attributes exposing (type', value)
 import Html.Events exposing (onInput, onSubmit, onClick)
 import Html.App
@@ -10,6 +10,7 @@ import Phoenix.Channel
 import Phoenix.Push
 import Json.Encode as JE
 import Json.Decode as JD exposing ((:=))
+import Dict
 
 -- MAIN
 
@@ -114,7 +115,7 @@ update msg model =
 
     SendMessage ->
       let
-        payload = (JE.object [ ("user", JE.string "frank"), ("body", JE.string model.newMessage) ])
+        payload = (JE.object [ ("user", JE.string "user"), ("body", JE.string model.newMessage) ])
         push' =
           Phoenix.Push.init "new:msg" "rooms:lobby"
             |> Phoenix.Push.withPayload payload
@@ -178,17 +179,31 @@ update msg model =
 view : Model -> Html Msg
 view model =
   div []
-    [ h1 [] [ text "Messages:" ]
+    [ h3 [] [ text "Channels:" ]
     , div
         []
         [ button [ onClick JoinChannel ] [ text "Join channel" ]
         , button [ onClick LeaveChannel ] [ text "Leave channel" ]
         ]
+    , channelsTable (Dict.values model.phxSocket.channels)
     , br [] []
-    , div [] [ text (toString model.phxSocket.ref) ]
-    , text (toString model.phxSocket.channels)
+    , h3 [] [ text "Messages:" ]
     , newMessageForm model
     , ul [] (List.map renderMessage model.messages)
+    ]
+
+channelsTable : List (Phoenix.Channel.Channel Msg) -> Html Msg
+channelsTable channels =
+  table []
+    [ tbody [] (List.map channelRow channels)
+    ]
+
+channelRow : (Phoenix.Channel.Channel Msg) -> Html Msg
+channelRow channel =
+  tr []
+    [ td [] [ text channel.name ]
+    , td [] [ (text << toString) channel.payload ]
+    , td [] [ (text << toString) channel.state ]
     ]
 
 newMessageForm : Model -> Html Msg
