@@ -121,18 +121,29 @@ withDebug socket =
 
 join : Channel msg -> Socket msg -> (Socket msg, Cmd (Msg msg))
 join channel socket =
-  if channel.state == Channel.Leaving then
-    ( socket, Cmd.none )
-  else
-    let
-      push' = Push "phx_join" channel.name channel.payload channel.onJoin channel.onError
-      channel' = { channel | state = Channel.Joining, joinRef = socket.ref }
-      socket' =
-        { socket
-          | channels = Dict.insert channel.name channel' socket.channels
-        }
-    in
-      push push' socket'
+  case Dict.get channel.name socket.channels of
+    Just {state} ->
+      if state == Channel.Joined || state == Channel.Joining then
+        ( socket, Cmd.none )
+      else
+        joinChannel channel socket
+
+    Nothing ->
+      joinChannel channel socket
+
+
+joinChannel : Channel msg -> Socket msg -> ( Socket msg, Cmd (Msg msg) )
+joinChannel channel socket =
+  let
+    push' = Push "phx_join" channel.name channel.payload channel.onJoin channel.onError
+    channel' = { channel | state = Channel.Joining, joinRef = socket.ref }
+    socket' =
+      { socket
+        | channels = Dict.insert channel.name channel' socket.channels
+      }
+  in
+    push push' socket'
+
 
 {-| Leaves a channel
 
