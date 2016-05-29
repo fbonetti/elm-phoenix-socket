@@ -42,7 +42,8 @@ type Msg
   | ReceiveChatMessage JE.Value
   | JoinChannel
   | LeaveChannel
-  | Log JE.Value
+  | ShowJoinedMessage String
+  | ShowLeftMessage String
   | NoOp
 
 
@@ -147,7 +148,8 @@ update msg model =
         channel =
           Phoenix.Channel.init "rooms:lobby"
             |> Phoenix.Channel.withPayload userParams
-            |> Phoenix.Channel.onError Log
+            |> Phoenix.Channel.onJoin (always (ShowJoinedMessage "rooms:lobby"))
+            |> Phoenix.Channel.onClose (always (ShowLeftMessage "rooms:lobby"))
 
         (phxSocket, phxCmd) = Phoenix.Socket.join channel model.phxSocket
       in
@@ -163,11 +165,15 @@ update msg model =
         , Cmd.map PhoenixMsg phxCmd
         )
 
-    Log response ->
-      let
-        a = Debug.log "payload" response
-      in
-        ( model, Cmd.none )
+    ShowJoinedMessage channelName ->
+      ( { model | messages = ("Joined channel " ++ channelName) :: model.messages }
+      , Cmd.none
+      )
+
+    ShowLeftMessage channelName ->
+      ( { model | messages = ("Left channel " ++ channelName) :: model.messages }
+      , Cmd.none
+      )
 
     NoOp ->
       ( model, Cmd.none )
@@ -189,7 +195,7 @@ view model =
     , br [] []
     , h3 [] [ text "Messages:" ]
     , newMessageForm model
-    , ul [] (List.map renderMessage model.messages)
+    , ul [] ((List.reverse << List.map renderMessage) model.messages)
     ]
 
 channelsTable : List (Phoenix.Channel.Channel Msg) -> Html Msg
