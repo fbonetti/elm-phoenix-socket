@@ -29,26 +29,32 @@ but you need to add some boilerplate to your project to wire everything up.
 
 3. Add a PhoenixMsg tag to your Msg type
 
-        type Msg
-          = UpdateSomething
-          | DoSomethingElse
-          | PhoenixMsg
+    ```elm
+    type Msg
+      = UpdateSomething
+      | DoSomethingElse
+      | PhoenixMsg
+    ```
 
 4. Add the following to your update function
 
-        PhoenixMsg msg ->
-          let
-            ( phxSocket, phxCmd ) = Phoenix.Socket.update msg model.phxSocket
-          in
-            ( { model | phxSocket = phxSocket }
-            , Cmd.map PhoenixMsg phxCmd
-            )
+    ```elm
+    PhoenixMsg msg ->
+      let
+        ( phxSocket, phxCmd ) = Phoenix.Socket.update msg model.phxSocket
+      in
+        ( { model | phxSocket = phxSocket }
+        , Cmd.map PhoenixMsg phxCmd
+        )
+    ```
 
 5. Listen for messages
 
-        subscriptions : Model -> Sub Msg
-        subscriptions model =
-          Phoenix.Socket.listen model.phxSocket PhoenixMsg
+    ```elm
+    subscriptions : Model -> Sub Msg
+    subscriptions model =
+      Phoenix.Socket.listen model.phxSocket PhoenixMsg
+    ```
 
 Take a look at examples/Chat.elm if you want to see an example.
 
