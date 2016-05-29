@@ -1,9 +1,6 @@
 module Phoenix.Socket exposing (Socket, Msg, init, update, withDebug, join, leave, push, on, off, listen)
 
-{-| This library is a pure Elm interpretation of the Phoenix.Socket library
-that comes bundled with the Phoenix web framework. It aims to abstract away
-the more tedious bits of communicating with Phoenix, such as joining channels,
-leaving channels, registering event handlers, and handling errors.
+{-|
 
 # Socket
 @docs Socket, Msg, init, withDebug, update, listen
