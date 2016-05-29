@@ -255,7 +255,7 @@ mapInternalMsgs socket maybeMessage =
   case maybeMessage of
     Just mess ->
       let
-        message = if socket.debug then Debug.log "Phoenix message" message else mess
+        message = if socket.debug then Debug.log "Phoenix message" mess else mess
       in
         case message.event of
           "phx_reply" ->
