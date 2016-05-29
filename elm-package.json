@@ -1,5 +1,5 @@
 {
-    "version": "0.2.0",
+    "version": "1.0.0",
     "summary": "Pure Elm state manager for Phoenix channels",
     "repository": "https://github.com/fbonetti/elm-phoenix-socket.git",
     "license": "MIT",
