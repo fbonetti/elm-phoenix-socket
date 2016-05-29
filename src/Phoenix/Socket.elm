@@ -159,8 +159,8 @@ leave channelName socket =
 
 {-| Pushes a message
 
-  push' = Phoenix.Push.init "new:msg" "rooms:lobby"
-  (socket', cmd) = push push' socket
+    push' = Phoenix.Push.init "new:msg" "rooms:lobby"
+    (socket', cmd) = push push' socket
 
 -}
 
@@ -175,9 +175,9 @@ push push' socket =
 
 {-| Registers an event handler
 
-  socket
-    |> on "new:msg" "rooms:lobby" ReceiveChatMessage
-    |> on "alert:msg" "rooms:lobby" ReceiveAlertMessage
+    socket
+      |> on "new:msg" "rooms:lobby" ReceiveChatMessage
+      |> on "alert:msg" "rooms:lobby" ReceiveAlertMessage
 
 -}
 
@@ -189,9 +189,9 @@ on eventName channelName onReceive socket =
 
 {-| Removes an event handler
 
-  socket
-    |> off "new:msg" "rooms:lobby"
-    |> off "alert:msg" "rooms:lobby"
+    socket
+      |> off "new:msg" "rooms:lobby"
+      |> off "alert:msg" "rooms:lobby"
 
 -}
 
@@ -216,8 +216,8 @@ sendMessage path message =
 {-| Listens for phoenix messages and converts them into type `msg`
 -}
 
-listen : (Msg msg -> msg) -> Socket msg -> Sub msg
-listen fn socket =
+listen : Socket msg -> (Msg msg -> msg) -> Sub msg
+listen socket fn =
   (Sub.batch >> Sub.map (mapAll fn))
     [ internalMsgs socket
     , externalMsgs socket

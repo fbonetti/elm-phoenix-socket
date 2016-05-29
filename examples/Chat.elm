@@ -72,7 +72,7 @@ init =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-  Phoenix.Socket.listen PhoenixMsg model.phxSocket
+  Phoenix.Socket.listen model.phxSocket PhoenixMsg
 
 -- COMMANDS
 
