@@ -3,12 +3,14 @@ module Phoenix.Helpers exposing (..)
 import Json.Decode as JD exposing ((:=))
 import Json.Encode as JE
 
+
 type alias Message =
   { event : String
   , topic : String
   , payload : JD.Value
   , ref : Maybe Int
   }
+
 
 nullOrInt : JD.Decoder (Maybe Int)
 nullOrInt =

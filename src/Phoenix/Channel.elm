@@ -9,9 +9,9 @@ module Phoenix.Channel exposing (Channel, State(..), init, withPayload, onError,
 import Phoenix.Helpers exposing (emptyPayload)
 import Json.Encode as JE
 
+
 {-| Represents a phoenix channel
 -}
-
 type alias Channel msg =
   { name : String
   , payload : JE.Value
@@ -24,9 +24,9 @@ type alias Channel msg =
   , leaveRef : Int
   }
 
+
 {-| All possible states a channel can be in
 -}
-
 type State
   = Closed
   | Errored
@@ -34,12 +34,12 @@ type State
   | Joining
   | Leaving
 
+
 {-| Initializes a channel
 
     init "rooms:lobby"
 
 -}
-
 init : String -> Channel msg
 init name =
   { name = name
@@ -53,6 +53,7 @@ init name =
   , leaveRef = -1
   }
 
+
 {-| Attaches a payload that's used for authentication
 
     payload = JE.object [ ("user_id", JE.string "123") ]
@@ -60,38 +61,37 @@ init name =
       |> withPayload payload
 
 -}
-
 withPayload : JE.Value -> Channel msg -> Channel msg
 withPayload payload channel =
   { channel | payload = payload }
 
-{-|-}
 
+{-| -}
 onError : (JE.Value -> msg) -> Channel msg -> Channel msg
 onError valueToMsg channel =
   { channel | onError = Just valueToMsg }
 
-{-|-}
 
+{-| -}
 onClose : (JE.Value -> msg) -> Channel msg -> Channel msg
 onClose valueToMsg channel =
   { channel | onClose = Just valueToMsg }
 
-{-|-}
 
+{-| -}
 onJoin : (JE.Value -> msg) -> Channel msg -> Channel msg
 onJoin valueToMsg channel =
   { channel | onJoin = Just valueToMsg }
 
-{-|-}
 
+{-| -}
 onJoinError : (JE.Value -> msg) -> Channel msg -> Channel msg
 onJoinError valueToMsg channel =
   { channel | onJoinError = Just valueToMsg }
 
+
 {-| Sets the state of a channel. Internal use only.
 -}
-
 setState : State -> Channel msg -> Channel msg
 setState state channel =
   { channel | state = state }
