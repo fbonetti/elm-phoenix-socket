@@ -5,7 +5,9 @@ import Html.Attributes exposing (type', value)
 import Html.Events exposing (onInput, onSubmit, onClick)
 import Html.App
 import Platform.Cmd
-import Phoenix.SocketOld
+import Phoenix.Socket
+import Phoenix.Push
+import Phoenix.Channel
 import Json.Encode as JE
 import Json.Decode as JD exposing ((:=))
 
@@ -35,24 +37,25 @@ type Msg
   = ReceiveMessage String
   | SendMessage
   | SetNewMessage String
-  | PhoenixMsg (Phoenix.SocketOld.Msg Msg)
-  | ReceivePhxMessage ChatMessage
+  | PhoenixMsg (Phoenix.Socket.Msg Msg)
+  | ReceiveChatMessage JE.Value
   | JoinChannel
   | LeaveChannel
+  | Log JE.Value
   | NoOp
 
 
 type alias Model =
   { newMessage : String
   , messages : List String
-  , phxSocket : Phoenix.SocketOld.Socket Msg
+  , phxSocket : Phoenix.Socket.Socket Msg
   }
 
-initPhxSocket : Phoenix.SocketOld.Socket Msg
+initPhxSocket : Phoenix.Socket.Socket Msg
 initPhxSocket =
-  Phoenix.SocketOld.init socketServer
-    |> Phoenix.SocketOld.withDebug
-    |> Phoenix.SocketOld.on "new:msg" "rooms:lobby" receivePhxMessageDecoder (always NoOp)
+  Phoenix.Socket.init socketServer
+    |> Phoenix.Socket.withDebug
+    |> Phoenix.Socket.on "new:msg" "rooms:lobby" ReceiveChatMessage
 
 initModel : Model
 initModel =
@@ -69,7 +72,7 @@ init =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-  Phoenix.SocketOld.listen PhoenixMsg model.phxSocket
+  Phoenix.Socket.listen PhoenixMsg model.phxSocket
 
 -- COMMANDS
 
@@ -81,12 +84,11 @@ type alias ChatMessage =
   , body : String
   }
 
-receivePhxMessageDecoder : JD.Decoder Msg
-receivePhxMessageDecoder =
+chatMessageDecoder : JD.Decoder ChatMessage
+chatMessageDecoder =
   JD.object2 ChatMessage
     ("user" := JD.string)
     ("body" := JD.string)
-    |> JD.map ReceivePhxMessage
 
 -- UPDATE
 
@@ -104,18 +106,25 @@ update msg model =
 
     PhoenixMsg msg ->
       let
-        ( phxSocket, phxCmd ) = Phoenix.SocketOld.update msg model.phxSocket
+        ( phxSocket, phxCmd ) = Phoenix.Socket.update msg model.phxSocket
       in
-        ( { model | phxSocket = phxSocket }, phxCmd )
+        ( { model | phxSocket = phxSocket }
+        , Cmd.map PhoenixMsg phxCmd
+        )
 
     SendMessage ->
       let
         payload = (JE.object [ ("user", JE.string "frank"), ("body", JE.string model.newMessage) ])
+        push' =
+          Phoenix.Push.init "new:msg" "rooms:lobby"
+            |> Phoenix.Push.withPayload payload
+        (phxSocket, phxCmd) = Phoenix.Socket.push push' model.phxSocket
       in
         ( { model
           | newMessage = ""
+          , phxSocket = phxSocket
           }
-        , Phoenix.SocketOld.push "rooms:lobby" "new:msg" payload model.phxSocket
+        , Cmd.map PhoenixMsg phxCmd
         )
 
     SetNewMessage str ->
@@ -123,26 +132,41 @@ update msg model =
       , Cmd.none
       )
 
-    ReceivePhxMessage chatMessage ->
-      ( { model | messages = (chatMessage.user ++ ": " ++ chatMessage.body) :: model.messages }
-      , Cmd.none
-      )
+    ReceiveChatMessage raw ->
+      case JD.decodeValue chatMessageDecoder raw of
+        Ok chatMessage ->
+          ( { model | messages = (chatMessage.user ++ ": " ++ chatMessage.body) :: model.messages }
+          , Cmd.none
+          )
+        Err error ->
+          ( model, Cmd.none )
 
     JoinChannel ->
       let
-        (phxSocket, phxCmd) = Phoenix.SocketOld.join "rooms:lobby" userParams model.phxSocket
+        channel =
+          Phoenix.Channel.init "rooms:lobby"
+            |> Phoenix.Channel.withPayload userParams
+            |> Phoenix.Channel.onError Log
+
+        (phxSocket, phxCmd) = Phoenix.Socket.join channel model.phxSocket
       in
         ({ model | phxSocket = phxSocket }
-        , phxCmd
+        , Cmd.map PhoenixMsg phxCmd
         )
 
     LeaveChannel ->
       let
-        (phxSocket, phxCmd) = Phoenix.SocketOld.leave "rooms:lobby" model.phxSocket
+        (phxSocket, phxCmd) = Phoenix.Socket.leave "rooms:lobby" model.phxSocket
       in
         ({ model | phxSocket = phxSocket }
-        , phxCmd
-        )      
+        , Cmd.map PhoenixMsg phxCmd
+        )
+
+    Log response ->
+      let
+        a = Debug.log "payload" response
+      in
+        ( model, Cmd.none )
 
     NoOp ->
       ( model, Cmd.none )
@@ -161,6 +185,7 @@ view model =
         , button [ onClick LeaveChannel ] [ text "Leave channel" ]
         ]
     , br [] []
+    , div [] [ text (toString model.phxSocket.ref) ]
     , text (toString model.phxSocket.channels)
     , newMessageForm model
     , ul [] (List.map renderMessage model.messages)
