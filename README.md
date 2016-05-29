@@ -13,15 +13,19 @@ but you need to add some boilerplate to your project to wire everything up.
 
 1. Add a socket to your model
 
-        type alias Model =
-          { phxSocket : Phoenix.Socket.Socket Msg
-          }
+    ```elm
+    type alias Model =
+      { phxSocket : Phoenix.Socket.Socket Msg
+      }
+    ```
 
 2. Initialize the socket
 
-        init =
-          { phxSocket = Phoenix.Socket.init "PATH_TO_SERVER"
-          }
+    ```elm
+    init =
+      { phxSocket = Phoenix.Socket.init "PATH_TO_SERVER"
+      }
+    ```
 
 3. Add a PhoenixMsg tag to your Msg type
 
@@ -45,6 +49,8 @@ but you need to add some boilerplate to your project to wire everything up.
         subscriptions : Model -> Sub Msg
         subscriptions model =
           Phoenix.Socket.listen model.phxSocket PhoenixMsg
+
+Take a look at examples/Chat.elm if you want to see an example.
 
 ## Contributing
 
