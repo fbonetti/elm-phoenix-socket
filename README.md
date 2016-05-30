@@ -9,7 +9,9 @@ leaving channels, registering event handlers, and handling errors.
 ## Setup
 
 Phoenix connections are stateful. The Socket module will manage all of this for you,
-but you need to add some boilerplate to your project to wire everything up.
+but you need to add some boilerplate to your project to wire everything up. 
+
+This library is split into three pieces you can import : `Phoenix.Socket`, `Phoenix.Push`, and `Phoenix.Channel`.
 
 1. Add a socket to your model
 
@@ -19,7 +21,7 @@ but you need to add some boilerplate to your project to wire everything up.
       }
     ```
 
-2. Initialize the socket
+2. Initialize the socket. The default path for Phoenix in development is `"ws://localhost:4000/socket/websocket"`.
 
     ```elm
     init =
@@ -33,7 +35,8 @@ but you need to add some boilerplate to your project to wire everything up.
     type Msg
       = UpdateSomething
       | DoSomethingElse
-      | PhoenixMsg
+      | PhoenixMsg (Phoenix.Socket.Msg Msg)
+
     ```
 
 4. Add the following to your update function
