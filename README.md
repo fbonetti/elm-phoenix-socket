@@ -9,11 +9,17 @@ leaving channels, registering event handlers, and handling errors.
 ## Setup
 
 Phoenix connections are stateful. The Socket module will manage all of this for you,
-but you need to add some boilerplate to your project to wire everything up. 
+but you need to add some boilerplate to your project to wire everything up.
 
-This library is split into three pieces you can import : `Phoenix.Socket`, `Phoenix.Push`, and `Phoenix.Channel`.
+1. Import all three `Phoenix` modules
 
-1. Add a socket to your model
+    ```elm
+    import Phoenix.Socket
+    import Phoenix.Channel
+    import Phoenix.Push
+    ```
+
+2. Add a socket to your model
 
     ```elm
     type alias Model =
@@ -21,7 +27,7 @@ This library is split into three pieces you can import : `Phoenix.Socket`, `Phoe
       }
     ```
 
-2. Initialize the socket. The default path for Phoenix in development is `"ws://localhost:4000/socket/websocket"`.
+3. Initialize the socket. The default path for Phoenix in development is `"ws://localhost:4000/socket/websocket"`.
 
     ```elm
     init =
@@ -29,7 +35,7 @@ This library is split into three pieces you can import : `Phoenix.Socket`, `Phoe
       }
     ```
 
-3. Add a PhoenixMsg tag to your Msg type
+4. Add a PhoenixMsg tag to your Msg type
 
     ```elm
     type Msg
@@ -39,7 +45,7 @@ This library is split into three pieces you can import : `Phoenix.Socket`, `Phoe
 
     ```
 
-4. Add the following to your update function
+5. Add the following to your update function
 
     ```elm
     PhoenixMsg msg ->
@@ -51,7 +57,7 @@ This library is split into three pieces you can import : `Phoenix.Socket`, `Phoe
         )
     ```
 
-5. Listen for messages
+6. Listen for messages
 
     ```elm
     subscriptions : Model -> Sub Msg
