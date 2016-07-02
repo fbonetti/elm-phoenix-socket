@@ -3,7 +3,7 @@ module Phoenix.Socket exposing (Socket, Msg, init, update, withDebug, join, leav
 {-|
 
 # Socket
-@docs Socket, Msg, init, withDebug, update, listen
+@docs Socket, Msg, init, withDebug, withoutHeartbeat, withHeartbeatInterval, update, listen
 
 # Channels
 @docs join, leave
