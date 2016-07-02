@@ -1,4 +1,4 @@
-module Phoenix.Socket exposing (Socket, Msg, init, update, withDebug, join, leave, push, on, off, listen)
+module Phoenix.Socket exposing (Socket, Msg, init, update, withDebug, join, leave, push, on, off, listen, withoutHeartbeat, withHeartbeatInterval)
 
 {-|
 
@@ -24,6 +24,7 @@ import WebSocket
 import Json.Encode as JE
 import Json.Decode as JD exposing ((:=))
 import Maybe exposing (andThen)
+import Time exposing (Time, every, second)
 
 
 {-| Stores channels, event handlers, and configuration options
@@ -35,6 +36,8 @@ type alias Socket msg =
   , events : Dict ( String, String ) (JE.Value -> msg)
   , pushes : Dict Int (Push msg)
   , ref : Int
+  , heartbeatIntervalSeconds : Float
+  , withoutHeartbeat : Bool
   }
 
 
@@ -46,6 +49,7 @@ type Msg msg
   | ChannelClosed String
   | ChannelJoined String
   | ReceiveReply String Int
+  | Heartbeat Time
 
 
 {-| Initializes a `Socket` with the given path
@@ -58,6 +62,8 @@ init path =
   , events = Dict.fromList []
   , pushes = Dict.fromList []
   , ref = 0
+  , heartbeatIntervalSeconds = 30
+  , withoutHeartbeat = False
   }
 
 
@@ -111,6 +117,9 @@ update msg socket =
         Nothing ->
           ( socket, Cmd.none )
 
+    Heartbeat _ ->
+      heartbeat socket
+
     _ ->
       ( socket, Cmd.none )
 
@@ -120,6 +129,22 @@ update msg socket =
 withDebug : Socket msg -> Socket msg
 withDebug socket =
   { socket | debug = True }
+
+
+{-| Sends the heartbeat every interval in seconds
+
+    Default is 30 seconds
+-}
+withHeartbeatInterval : Float -> Socket msg -> Socket msg
+withHeartbeatInterval intervalSeconds socket =
+  { socket | heartbeatIntervalSeconds = intervalSeconds }
+
+
+{-| Turns off the heartbeat
+-}
+withoutHeartbeat: Socket msg -> Socket msg
+withoutHeartbeat socket =
+  { socket | withoutHeartbeat = True }
 
 
 {-| Joins a channel
@@ -187,6 +212,15 @@ leave channelName socket =
       ( socket, Cmd.none )
 
 
+heartbeat : Socket msg -> ( Socket msg, Cmd (Msg msg) )
+heartbeat socket =
+  let
+    push' =
+      Push.init "heartbeat" "phoenix"
+  in
+    push push' socket
+
+
 {-| Pushes a message
 
     push' = Phoenix.Push.init "new:msg" "rooms:lobby"
@@ -252,6 +286,7 @@ listen socket fn =
   (Sub.batch >> Sub.map (mapAll fn))
     [ internalMsgs socket
     , externalMsgs socket
+    , heartbeatSubscription socket
     ]
 
 
@@ -281,6 +316,14 @@ debugIfEnabled socket =
 decodeMessage : String -> Maybe Message
 decodeMessage =
   JD.decodeString messageDecoder >> Result.toMaybe
+
+
+heartbeatSubscription : Socket msg -> Sub (Msg msg)
+heartbeatSubscription socket =
+  if socket.withoutHeartbeat then
+    Sub.none
+  else
+    Time.every (Time.second * socket.heartbeatIntervalSeconds) Heartbeat
 
 
 internalMsgs : Socket msg -> Sub (Msg msg)
