@@ -73,6 +73,12 @@ Pull requests and issues are greatly appreciated! If you think there's a better 
 to implement this library, I'd love to hear your feedback. I basically tried to model
 this library after the official javascript one, but that may not be the best approach.
 
+## Change log
+
+# v2.0.0
+
+- Client sends a heartbeat every 30 seconds (by default) to ensure that the connection stays healthy
+- The heartbeat can be turned off or set to a different interval
 
 ## To do:
 
