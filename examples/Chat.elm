@@ -35,8 +35,7 @@ socketServer = "ws://phoenixchat.herokuapp.com/ws"
 
 
 type Msg
-  = ReceiveMessage String
-  | SendMessage
+  = SendMessage
   | SetNewMessage String
   | PhoenixMsg (Phoenix.Socket.Msg Msg)
   | ReceiveChatMessage JE.Value
@@ -101,11 +100,6 @@ userParams =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
   case msg of
-    ReceiveMessage str ->
-      ( { model | messages = str :: model.messages }
-      , Cmd.none
-      )
-
     PhoenixMsg msg ->
       let
         ( phxSocket, phxCmd ) = Phoenix.Socket.update msg model.phxSocket
