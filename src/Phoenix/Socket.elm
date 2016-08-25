@@ -67,6 +67,22 @@ init path =
   }
 
 
+{-| Maps a Socket to (Socket, Cmd) function over a (Socket, Cmd), combining both Cmds
+-}
+map : (Socket msg -> ( Socket msg, Cmd (Msg msg) ))
+    -> ( Socket msg, Cmd (Msg msg) )
+    -> ( Socket msg, Cmd (Msg msg) )
+map f scktCmd =
+    let
+        ( socket, cmd ) =
+            scktCmd
+
+        ( resultSocket, cmd2 ) =
+            f socket
+    in
+        ( resultSocket, Cmd.batch ([ cmd, cmd2 ]) )
+
+
 {-| -}
 update : Msg msg -> Socket msg -> ( Socket msg, Cmd (Msg msg) )
 update msg socket =
