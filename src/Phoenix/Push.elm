@@ -46,7 +46,7 @@ withPayload payload push =
 {-| Attaches a success handler
 
     init "new:msg" "rooms:lobby"
-      |> onOk HandlePushOk
+      |> onOk handlePushOk
 
 -}
 onOk : (JE.Value -> msg) -> Push msg -> Push msg
@@ -57,7 +57,7 @@ onOk valueToMsg push =
 {-| Attaches an error handler
 
     init "new:msg" "rooms:lobby"
-      |> onError HandlePushError
+      |> onError handlePushError
 
 -}
 onError : (JE.Value -> msg) -> Push msg -> Push msg
