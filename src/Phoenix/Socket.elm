@@ -1,9 +1,9 @@
-module Phoenix.Socket exposing (Socket, Msg, init, update, withDebug, join, leave, push, on, off, listen, withoutHeartbeat, withHeartbeatInterval)
+module Phoenix.Socket exposing (Socket, Msg, init, update, withDebug, join, leave, push, on, off, listen, withoutHeartbeat, withHeartbeatInterval, map)
 
 {-|
 
 # Socket
-@docs Socket, Msg, init, withDebug, withoutHeartbeat, withHeartbeatInterval, update, listen
+@docs Socket, Msg, init, withDebug, withoutHeartbeat, withHeartbeatInterval, update, listen, map
 
 # Channels
 @docs join, leave
@@ -478,3 +478,11 @@ handleEvent socket message =
 
         Nothing ->
             NoOp
+
+{-| -}
+map : (msg1 -> msg2) -> Socket msg1 -> Socket msg2
+map fn socket = 
+    { socket
+    | channels = Dict.map (\_ channel -> Channel.map fn channel) socket.channels
+    , events  = Dict.map (\_ event -> fn << event) socket.events
+    , pushes = Dict.map (\_ push -> Push.map fn push) socket.pushes }
