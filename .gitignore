@@ -1,3 +1,6 @@
 /elm-stuff
 /examples/elm-stuff
 documentation.json
+
+# Editor ignores
+.idea
