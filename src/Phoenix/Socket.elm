@@ -171,7 +171,7 @@ joinChannel : Channel msg -> Socket msg -> ( Socket msg, Cmd (Msg msg) )
 joinChannel channel socket =
     let
         push_ =
-            Push "phx_join" channel.name channel.payload channel.onJoin channel.onError
+            Push "phx_join" channel.name channel.payload channel.onJoin channel.onJoinError
 
         channel_ =
             { channel | state = Channel.Joining, joinRef = socket.ref }
