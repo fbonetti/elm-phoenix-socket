@@ -1,3 +1,7 @@
-/elm-stuff
-/examples/elm-stuff
+examples/elm-stuff
+elm-stuff
 documentation.json
+tests/tests.js
+
+# Editor ignores
+.idea

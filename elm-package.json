@@ -1,5 +1,5 @@
 {
-    "version": "2.0.2",
+    "version": "2.1.0",
     "summary": "Pure Elm state manager for Phoenix channels",
     "repository": "https://github.com/fbonetti/elm-phoenix-socket.git",
     "license": "MIT",
@@ -9,7 +9,8 @@
     "exposed-modules": [
         "Phoenix.Socket",
         "Phoenix.Channel",
-        "Phoenix.Push"
+        "Phoenix.Push",
+        "Phoenix.Presence"
     ],
     "dependencies": {
         "elm-lang/core": "5.0.0 <= v < 6.0.0",
