@@ -1,13 +1,5 @@
 # elm-phoenix-socket
 
----
-
-**NOTE: I no longer have time to maintain this project. If you would like to take ownership of this project, please email me and I will gladly add you as a contributor.**
-
-If you're looking for an alternative project that uses Effects Managers, checkout the excellent [`elm-phoenix`](https://github.com/saschatimme/elm-phoenix) package. The API is almost identical with the key difference being that it manages it's own state internerally, so you don't need to keep a `Socket` instance in your model.
-
----
-
 This library is a pure Elm interpretation of the Phoenix.Socket library
 that comes bundled with the Phoenix web framework. It aims to abstract away
 the more tedious bits of communicating with Phoenix, such as joining channels,
@@ -79,13 +71,6 @@ Take a look at examples/Chat.elm if you want to see an example.
 Pull requests and issues are greatly appreciated! If you think there's a better way
 to implement this library, I'd love to hear your feedback. I basically tried to model
 this library after the official javascript one, but that may not be the best approach.
-
-## Change log
-
-### v2.0.0
-
-- Client sends a heartbeat every 30 seconds (by default) to ensure that the connection stays healthy
-- The heartbeat can be turned off or set to a different interval
 
 ## To do:
 
