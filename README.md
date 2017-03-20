@@ -71,8 +71,3 @@ Take a look at examples/Chat.elm if you want to see an example.
 Pull requests and issues are greatly appreciated! If you think there's a better way
 to implement this library, I'd love to hear your feedback. I basically tried to model
 this library after the official javascript one, but that may not be the best approach.
-
-## To do:
-
-- If a channel errors out, automatically reconnect with an exponential backoff strategy
-- Write tests

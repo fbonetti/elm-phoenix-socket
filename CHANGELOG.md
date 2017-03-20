@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.1.0
+### Added
+- Presence support (thanks @knewter)
+	- see examples/Presence.elm
+
 ## v2.0.1
 ### Changed
 - Upgrade to Elm 0.18
