@@ -1,6 +1,6 @@
 module Presence exposing (..)
 
-import Html.App as App
+import Html as Html
 import Html exposing (..)
 import Html.Attributes exposing (value, placeholder, class)
 import Html.Events exposing (onInput, onClick, onSubmit)
@@ -9,7 +9,7 @@ import Phoenix.Channel
 import Phoenix.Push
 import Phoenix.Presence exposing (PresenceState, syncState, syncDiff, presenceStateDecoder, presenceDiffDecoder)
 import Json.Encode as JE
-import Json.Decode as JD exposing ((:=))
+import Json.Decode as JD
 import Debug
 import Dict exposing (Dict)
 
@@ -129,12 +129,12 @@ update msg model =
                         payload =
                             (JE.object [ ( "body", JE.string model.newMessage ) ])
 
-                        push' =
+                        pushPrime =
                             Phoenix.Push.init "new:msg" "room:lobby"
                                 |> Phoenix.Push.withPayload payload
 
                         ( phxSocket, phxCmd ) =
-                            Phoenix.Socket.push push' modelPhxSocket
+                            Phoenix.Socket.push pushPrime modelPhxSocket
                     in
                         ( { model
                             | newMessage = ""
@@ -200,20 +200,20 @@ update msg model =
 
 chatMessageDecoder : JD.Decoder ChatMessage
 chatMessageDecoder =
-    JD.object2 ChatMessage
+    JD.map2 ChatMessage
         (JD.oneOf
-            [ ("user" := JD.string)
+            [ (JD.field "user" JD.string)
             , JD.succeed "anonymous"
             ]
         )
-        ("body" := JD.string)
+        (JD.field "body" JD.string)
 
 
 userPresenceDecoder : JD.Decoder UserPresence
 userPresenceDecoder =
-    JD.object2 UserPresence
-        ("online_at" := JD.string)
-        ("device" := JD.string)
+    JD.map2 UserPresence
+        (JD.field "online_at" JD.string)
+        (JD.field "device" JD.string)
 
 
 viewMessage : ChatMessage -> Html Msg
@@ -280,9 +280,9 @@ view model =
             chatInterfaceView model
 
 
-main : Program Never
+main : Program Never Model Msg
 main =
-    App.program
+    Html.program
         { init = init
         , update = update
         , view = view

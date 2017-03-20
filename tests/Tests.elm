@@ -1,6 +1,6 @@
 module Tests exposing (..)
 
-import ElmTest exposing (..)
+import Legacy.ElmTest exposing (..)
 import Phoenix.Presence
     exposing
         ( list
@@ -109,7 +109,7 @@ listTests =
 
 syncStateSyncsEmptyState : Test
 syncStateSyncsEmptyState =
-    fixtures.joins `equals` (fixtures.empty |> syncState fixtures.joins)
+    fixtures.joins |> equals (fixtures.empty |> syncState fixtures.joins)
 
 
 syncDiffSyncsEmptyState : Test
@@ -118,7 +118,7 @@ syncDiffSyncsEmptyState =
         diff =
             PresenceDiff fixtures.empty fixtures.joins
     in
-        fixtures.joins `equals` (fixtures.empty |> syncDiff diff)
+        fixtures.joins |> equals (fixtures.empty |> syncDiff diff)
 
 
 syncDiffRemovesPresenceWhenMetaIsEmptyAndAddsAdditionalMeta : Test
@@ -132,7 +132,7 @@ syncDiffRemovesPresenceWhenMetaIsEmptyAndAddsAdditionalMeta =
                 |> Dict.insert "u1" u1PresenceStateMetaWrapperWithAddition
                 |> Dict.insert "u3" u3PresenceStateMetaWrapper
     in
-        expectedState `equals` (fixtures.state |> syncDiff diff)
+        expectedState |> equals (fixtures.state |> syncDiff diff)
 
 
 syncDiffAddsTwoNewUsersToExistingUserSuccessfully : Test
@@ -158,7 +158,7 @@ syncDiffAddsTwoNewUsersToExistingUserSuccessfully =
             initialState
                 |> syncDiff diff
     in
-        expectedState `equals` newState
+        expectedState |> equals newState
 
 
 listListsFullPresenceByDefault : Test
@@ -174,7 +174,7 @@ listListsFullPresenceByDefault =
         expected =
             [ u1PresenceStateMetaWrapperWithAddition ]
     in
-        result `equals` expected
+        result |> equals expected
 
 
 listListsWithCustomFunction : Test
@@ -195,7 +195,7 @@ listListsWithCustomFunction =
         expected =
             [ Just { sampleMeta | phx_ref = "1.2" } ]
     in
-        result `equals` expected
+        result |> equals expected
 
 
 consoleTests : Test

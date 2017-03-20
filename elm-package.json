@@ -9,7 +9,8 @@
     "exposed-modules": [
         "Phoenix.Socket",
         "Phoenix.Channel",
-        "Phoenix.Push"
+        "Phoenix.Push",
+        "Phoenix.Presence"
     ],
     "dependencies": {
         "elm-lang/core": "5.0.0 <= v < 6.0.0",

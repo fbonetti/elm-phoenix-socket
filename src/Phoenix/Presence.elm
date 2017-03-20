@@ -19,7 +19,7 @@ module Phoenix.Presence
 -}
 
 import Dict exposing (Dict)
-import Json.Decode as JD exposing ((:=))
+import Json.Decode as JD
 
 
 -- TYPES
@@ -61,9 +61,9 @@ type alias PresenceDiff a =
 -}
 presenceDiffDecoder : JD.Decoder a -> JD.Decoder (PresenceDiff a)
 presenceDiffDecoder payloadDecoder =
-    JD.object2 PresenceDiff
-        ("leaves" := presenceStateDecoder payloadDecoder)
-        ("joins" := presenceStateDecoder payloadDecoder)
+    JD.map2 PresenceDiff
+        (JD.field "leaves" <| presenceStateDecoder payloadDecoder)
+        (JD.field "joins" <| presenceStateDecoder payloadDecoder)
 
 
 {-| Decodes a PresenceState, parameterized on the type of your application-defined payload
@@ -77,8 +77,8 @@ presenceStateDecoder payloadDecoder =
 -}
 presenceStateMetaWrapperDecoder : JD.Decoder a -> JD.Decoder (PresenceStateMetaWrapper a)
 presenceStateMetaWrapperDecoder payloadDecoder =
-    JD.object1 PresenceStateMetaWrapper
-        ("metas" := JD.list (presenceStateMetaDecoder payloadDecoder))
+    JD.map PresenceStateMetaWrapper
+        (JD.field "metas" <| JD.list (presenceStateMetaDecoder payloadDecoder))
 
 
 {-| Decodes a PresenceStateMetaValue, parameterized on the type of your application-defined payload
@@ -87,12 +87,12 @@ presenceStateMetaDecoder : JD.Decoder a -> JD.Decoder (PresenceStateMetaValue a)
 presenceStateMetaDecoder payloadDecoder =
     let
         createFinalRecord phxRef payload =
-            JD.succeed (PresenceStateMetaValue phxRef payload)
+          JD.succeed (PresenceStateMetaValue phxRef payload)
 
         decodeWithPhxRef phxRef =
-            payloadDecoder `JD.andThen` (createFinalRecord phxRef)
+          JD.andThen (createFinalRecord phxRef) payloadDecoder
     in
-        ("phx_ref" := JD.string) `JD.andThen` decodeWithPhxRef
+        JD.andThen decodeWithPhxRef (JD.field "phx_ref" JD.string)
 
 
 
@@ -146,9 +146,9 @@ syncDiff diff state =
         mergeJoins : PresenceState a -> PresenceState a -> PresenceState a
         mergeJoins left right =
             let
-                inBoth : comparable -> PresenceStateMetaWrapper a -> PresenceStateMetaWrapper a -> PresenceState a -> PresenceState a
+                inBoth : String -> PresenceStateMetaWrapper a -> PresenceStateMetaWrapper a -> PresenceState a -> PresenceState a
                 inBoth key leftValue rightValue acc =
-                    acc |> Dict.insert key (PresenceStateMetaWrapper (leftValue.metas ++ rightValue.metas))
+                    Dict.insert key (PresenceStateMetaWrapper (leftValue.metas ++ rightValue.metas)) acc
             in
                 merge Dict.insert
                     inBoth
