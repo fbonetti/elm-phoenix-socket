@@ -1,8 +1,8 @@
-module Phoenix.Push exposing (Push, init, withPayload, onError, onOk)
+module Phoenix.Push exposing (Push, init, withPayload, onError, onOk, map)
 
 {-|
 
-@docs Push, init, withPayload, onError, onOk
+@docs Push, init, withPayload, onError, onOk, map
 
 -}
 
@@ -63,3 +63,10 @@ onOk valueToMsg push =
 onError : (JE.Value -> msg) -> Push msg -> Push msg
 onError valueToMsg push =
     { push | onError = Just valueToMsg }
+
+{-| -}
+map : (msg1 -> msg2) -> Push msg1 -> Push msg2
+map fn push =
+    { push 
+    | onOk = Maybe.map ((<<) fn) push.onOk
+    , onError = Maybe.map ((<<) fn) push.onError }
