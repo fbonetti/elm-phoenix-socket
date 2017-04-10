@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.2.0
+### Added
+- Channel/Socket/Push map functions
+
+### Fixed
+- Channel.onJoinError now works as expected (thanks @coryc5)
+
 ## v2.1.0
 ### Added
 - Presence support (thanks @knewter)
